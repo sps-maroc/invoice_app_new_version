@@ -1,0 +1,754 @@
+{% extends "base.html" %}
+
+{% block title %}Document Browser - Enterprise Invoice Management{% endblock %}
+
+{% block head %}
+<style>
+    .folder-tree {
+        max-height: 600px;
+        overflow-y: auto;
+        border-right: 1px solid #dee2e6;
+    }
+    
+    .folder-tree .list-group-item {
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        cursor: pointer;
+    }
+    
+    .folder-tree .list-group-item:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .folder-tree .list-group-item.active {
+        background-color: #e9ecef;
+        color: #212529;
+        border-color: #dee2e6;
+        border-left: 3px solid #0d6efd;
+    }
+    
+    .document-view {
+        min-height: 600px;
+        border: 1px solid #dee2e6;
+        background-color: #f8f9fa;
+    }
+    
+    .document-details {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    .pdf-container {
+        height: 700px;
+        overflow: hidden;
+        background-color: #f5f5f5;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .pdf-viewer {
+        width: 100%;
+        height: 100%;
+        border: none;
+        background-color: #fff;
+    }
+    
+    .filter-controls {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    /* Simple loading indicator */
+    .loading-indicator {
+        display: none;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(0,0,0,0.7);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 4px;
+        z-index: 1000;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-folder me-2"></i>Document Browser</h2>
+        <p class="text-muted">Browse and view organized invoice documents</p>
+        <hr>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="filter-controls">
+            <div class="row">
+                <div class="col-md-2">
+                    <div class="mb-3 mb-md-0">
+                        <label for="company-filter" class="form-label">Company</label>
+                        <select class="form-select" id="company-filter">
+                            <option value="">All Companies</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="mb-3 mb-md-0">
+                        <label for="supplier-filter" class="form-label">Supplier</label>
+                        <select class="form-select" id="supplier-filter">
+                            <option value="">All Suppliers</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="mb-3 mb-md-0">
+                        <label for="year-filter" class="form-label">Year</label>
+                        <select class="form-select" id="year-filter">
+                            <option value="">All Years</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="mb-3 mb-md-0">
+                        <label for="month-filter" class="form-label">Month</label>
+                        <select class="form-select" id="month-filter">
+                            <option value="">All Months</option>
+                            <option value="01">January</option>
+                            <option value="02">February</option>
+                            <option value="03">March</option>
+                            <option value="04">April</option>
+                            <option value="05">May</option>
+                            <option value="06">June</option>
+                            <option value="07">July</option>
+                            <option value="08">August</option>
+                            <option value="09">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="mb-3 mb-md-0">
+                        <label for="invoice-number-filter" class="form-label">Invoice Number</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="invoice-number-filter" placeholder="Invoice #">
+                            <button class="btn btn-outline-secondary" type="button" id="clear-invoice-filter">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-1">
+                    <div class="d-flex align-items-end h-100 mb-3 mb-md-0">
+                        <button class="btn btn-primary w-100" id="apply-filters">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Document Navigator</h5>
+                <button class="btn btn-sm btn-outline-secondary" id="refresh-tree">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="folder-tree" id="folder-tree">
+                    <div class="d-flex justify-content-center p-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0" id="document-title">Document Viewer</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="pdf-container" id="pdf-container">
+                    <div class="text-center p-5" id="empty-viewer">
+                        <i class="bi bi-file-earmark-pdf" style="font-size: 4rem; color: #ccc;"></i>
+                        <p class="mt-3">Select a document to view</p>
+                    </div>
+                    <iframe id="pdf-viewer" class="pdf-viewer d-none" allowfullscreen></iframe>
+                    <div id="loading-indicator" class="loading-indicator">
+                        <i class="bi bi-hourglass-split me-2"></i>Loading PDF...
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-4" id="invoice-details-card" style="display: none;">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Invoice Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Invoice Number:</strong> <span id="detail-invoice-number"></span></p>
+                        <p><strong>Invoice Date:</strong> <span id="detail-invoice-date"></span></p>
+                        <p><strong>Supplier:</strong> <span id="detail-supplier"></span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Company:</strong> <span id="detail-company"></span></p>
+                        <p><strong>Amount:</strong> <span id="detail-amount"></span></p>
+                        <p><strong>VAT Amount:</strong> <span id="detail-vat"></span></p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <p><strong>Description:</strong></p>
+                        <p id="detail-description"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const folderTree = document.getElementById('folder-tree');
+        const pdfViewer = document.getElementById('pdf-viewer');
+        const emptyViewer = document.getElementById('empty-viewer');
+        const documentTitle = document.getElementById('document-title');
+        const invoiceDetailsCard = document.getElementById('invoice-details-card');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        
+        // Filter elements
+        const companyFilter = document.getElementById('company-filter');
+        const yearFilter = document.getElementById('year-filter');
+        const monthFilter = document.getElementById('month-filter');
+        const supplierFilter = document.getElementById('supplier-filter');
+        const refreshTreeBtn = document.getElementById('refresh-tree');
+        const invoiceNumberFilter = document.getElementById('invoice-number-filter');
+        const applyFiltersBtn = document.getElementById('apply-filters');
+        const clearInvoiceFilterBtn = document.getElementById('clear-invoice-filter');
+        
+        // Invoice detail elements
+        const detailInvoiceNumber = document.getElementById('detail-invoice-number');
+        const detailInvoiceDate = document.getElementById('detail-invoice-date');
+        const detailSupplier = document.getElementById('detail-supplier');
+        const detailCompany = document.getElementById('detail-company');
+        const detailAmount = document.getElementById('detail-amount');
+        const detailVat = document.getElementById('detail-vat');
+        const detailDescription = document.getElementById('detail-description');
+        
+        // Store the hierarchical invoice data
+        let invoiceData = [];
+        let companies = [];
+        let suppliers = [];
+        let years = new Set();
+        
+        // Load companies and suppliers for filters
+        loadFilterData();
+        
+        // Load invoice data
+        loadInvoices();
+        
+        // Add event listeners to filters
+        companyFilter.addEventListener('change', applyFilters);
+        yearFilter.addEventListener('change', applyFilters);
+        monthFilter.addEventListener('change', applyFilters);
+        supplierFilter.addEventListener('change', applyFilters);
+        refreshTreeBtn.addEventListener('click', loadInvoices);
+        invoiceNumberFilter.addEventListener('input', applyFilters);
+        applyFiltersBtn.addEventListener('click', applyFilters);
+        clearInvoiceFilterBtn.addEventListener('click', function() {
+            invoiceNumberFilter.value = '';
+            applyFilters();
+        });
+        
+        // Handle PDF iframe load events
+        pdfViewer.addEventListener('load', function() {
+            loadingIndicator.style.display = 'none';
+        });
+        
+        function loadFilterData() {
+            // Load companies
+            axios.get('/api/companies')
+                .then(response => {
+                    companies = response.data.companies;
+                    companyFilter.innerHTML = '<option value="">All Companies</option>';
+                    companies.forEach(company => {
+                        companyFilter.innerHTML += `<option value="${company.id}">${company.name}</option>`;
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading companies:', error);
+                });
+                
+            // Load suppliers
+            axios.get('/api/suppliers')
+                .then(response => {
+                    suppliers = response.data.suppliers;
+                    supplierFilter.innerHTML = '<option value="">All Suppliers</option>';
+                    suppliers.forEach(supplier => {
+                        supplierFilter.innerHTML += `<option value="${supplier.id}">${supplier.name}</option>`;
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading suppliers:', error);
+                });
+        }
+        
+        // Get filter values
+        function getFilterValues() {
+            return {
+                company_id: companyFilter.value,
+                supplier_id: supplierFilter.value,
+                year: yearFilter.value,
+                month: monthFilter.value,
+                invoice_number: invoiceNumberFilter.value
+            };
+        }
+        
+        // Load invoices with filters
+        function loadInvoices() {
+            // Clear selection and hide details
+            documentTitle.textContent = 'Document Viewer';
+            emptyViewer.style.display = 'block';
+            pdfViewer.classList.add('d-none');
+            invoiceDetailsCard.style.display = 'none';
+            
+            // Get filter values
+            const filters = getFilterValues();
+            
+            // Build query string
+            const queryParams = [];
+            for (const key in filters) {
+                if (filters[key]) {
+                    queryParams.push(`${key}=${encodeURIComponent(filters[key])}`);
+                }
+            }
+            
+            // Show loading state in tree
+            folderTree.innerHTML = `
+                <div class="d-flex justify-content-center p-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            `;
+            
+            // Fetch invoices with filters
+            axios.get(`/api/invoices${queryParams.length ? '?' + queryParams.join('&') : ''}`)
+                .then(response => {
+                    const invoices = response.data.invoices;
+                    
+                    // Create and render the folder tree
+                    if (filters.invoice_number) {
+                        // Flat list for invoice number search
+                        renderInvoiceSearchResults(invoices, filters.invoice_number);
+                    } else {
+                        // Hierarchical tree for normal browsing
+                        const treeData = buildFolderTree(invoices);
+                        renderFolderTree(treeData);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading invoices:', error);
+                    folderTree.innerHTML = `
+                        <div class="alert alert-danger m-3">
+                            Error loading invoices. Please try again.
+                        </div>
+                    `;
+                });
+        }
+
+        // Render invoice search results as a flat list
+        function renderInvoiceSearchResults(invoices, searchTerm) {
+            let html = '<div class="list-group">';
+            
+            // Add search info banner
+            html += `
+                <div class="alert alert-info m-3">
+                    <i class="bi bi-search me-2"></i>
+                    Showing results for invoice number: <strong>${searchTerm}</strong>
+                    <button class="btn btn-sm btn-outline-secondary float-end" id="clear-search">
+                        <i class="bi bi-x"></i> Clear Search
+                    </button>
+                </div>
+            `;
+            
+            if (invoices.length === 0) {
+                html += `
+                    <div class="alert alert-warning m-3">
+                        No invoices found matching the invoice number "${searchTerm}".
+                    </div>
+                `;
+            } else {
+                for (const invoice of invoices) {
+                    const filename = invoice.file_path ? invoice.file_path.split('\\').pop().split('/').pop() : 'Unknown';
+                    html += `
+                        <div class="list-group-item list-group-item-action invoice-item" 
+                             data-id="${invoice.id}" 
+                             data-filepath="${invoice.file_path}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="bi bi-file-earmark-pdf me-2"></i>
+                                    <strong>${invoice.invoice_number}</strong> - ${filename}
+                                </div>
+                                <span class="badge bg-primary rounded-pill">${formatCurrency(invoice.amount)}</span>
+                            </div>
+                            <small class="text-muted d-block mt-1">
+                                ${invoice.invoice_date || 'No date'} | ${invoice.supplier_name || 'Unknown supplier'} | ${invoice.company_name || 'Unknown company'}
+                            </small>
+                        </div>
+                    `;
+                }
+            }
+            
+            html += '</div>';
+            
+            // Update the DOM
+            folderTree.innerHTML = html;
+            
+            // Add event listeners
+            setupTreeInteraction();
+            
+            // Add clear search button handler
+            const clearSearchBtn = document.getElementById('clear-search');
+            if (clearSearchBtn) {
+                clearSearchBtn.addEventListener('click', function() {
+                    invoiceNumberFilter.value = '';
+                    loadInvoices();
+                });
+            }
+        }
+        
+        function updateYearFilter() {
+            // Extract unique years from invoice data
+            invoiceData.forEach(invoice => {
+                if (invoice.normalized_date) {
+                    const year = invoice.normalized_date.substring(0, 4);
+                    years.add(year);
+                }
+            });
+            
+            // Update year filter options
+            const currentYear = yearFilter.value;
+            yearFilter.innerHTML = '<option value="">All Years</option>';
+            
+            // Sort years in descending order
+            Array.from(years).sort().reverse().forEach(year => {
+                yearFilter.innerHTML += `<option value="${year}" ${year === currentYear ? 'selected' : ''}>${year}</option>`;
+            });
+        }
+        
+        function organizeInvoices(invoices) {
+            // Organize invoices by company > year > month > supplier > file
+            const structure = {};
+            
+            invoices.forEach(invoice => {
+                const company = invoice.company_name || 'Unknown';
+                let year = 'Unknown';
+                let month = 'Unknown';
+                
+                // Extract year and month from normalized_date if available
+                if (invoice.normalized_date) {
+                    const date = new Date(invoice.normalized_date);
+                    year = date.getFullYear().toString();
+                    month = (date.getMonth() + 1).toString().padStart(2, '0');
+                }
+                
+                const supplier = invoice.supplier_name || 'Unknown';
+                // Extract just the filename from the path
+                const fullPath = invoice.file_path || '';
+                const filename = fullPath.split(/[\/\\]/).pop() || 'Unknown';
+                
+                // Create the structure if it doesn't exist
+                if (!structure[company]) structure[company] = {};
+                if (!structure[company][year]) structure[company][year] = {};
+                if (!structure[company][year][month]) structure[company][year][month] = {};
+                if (!structure[company][year][month][supplier]) structure[company][year][month][supplier] = [];
+                
+                // Add the invoice to the structure
+                structure[company][year][month][supplier].push({
+                    id: invoice.id,
+                    filename: filename,
+                    filepath: invoice.file_path,
+                    invoice_number: invoice.invoice_number,
+                    invoice_date: invoice.invoice_date,
+                    amount: invoice.amount,
+                    vat_amount: invoice.vat_amount,
+                    description: invoice.description
+                });
+            });
+            
+            return structure;
+        }
+        
+        function updateFolderTree(data) {
+            let html = '<div class="list-group list-group-flush">';
+            
+            // Helper function to get month name
+            function getMonthName(month) {
+                const monthNames = [
+                    'January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'
+                ];
+                return monthNames[parseInt(month) - 1] || month;
+            }
+            
+            // Build the tree HTML
+            for (const company in data) {
+                html += `
+                    <div class="list-group-item list-group-item-action" data-toggle="collapse" data-target="#company-${company.replace(/\s+/g, '-')}">
+                        <i class="bi bi-building me-2"></i>${company}
+                    </div>
+                    <div class="collapse" id="company-${company.replace(/\s+/g, '-')}">
+                `;
+                
+                for (const year in data[company]) {
+                    html += `
+                        <div class="list-group-item list-group-item-action ps-4" data-toggle="collapse" data-target="#year-${company.replace(/\s+/g, '-')}-${year}">
+                            <i class="bi bi-calendar me-2"></i>${year}
+                        </div>
+                        <div class="collapse" id="year-${company.replace(/\s+/g, '-')}-${year}">
+                    `;
+                    
+                    for (const month in data[company][year]) {
+                        html += `
+                            <div class="list-group-item list-group-item-action ps-5" data-toggle="collapse" data-target="#month-${company.replace(/\s+/g, '-')}-${year}-${month}">
+                                <i class="bi bi-calendar-month me-2"></i>${getMonthName(month)}
+                            </div>
+                            <div class="collapse" id="month-${company.replace(/\s+/g, '-')}-${year}-${month}">
+                        `;
+                        
+                        for (const supplier in data[company][year][month]) {
+                            html += `
+                                <div class="list-group-item list-group-item-action ps-6" data-toggle="collapse" data-target="#supplier-${company.replace(/\s+/g, '-')}-${year}-${month}-${supplier.replace(/\s+/g, '-')}">
+                                    <i class="bi bi-shop me-2"></i>${supplier}
+                                </div>
+                                <div class="collapse" id="supplier-${company.replace(/\s+/g, '-')}-${year}-${month}-${supplier.replace(/\s+/g, '-')}">
+                            `;
+                            
+                            for (const invoice of data[company][year][month][supplier]) {
+                                html += `
+                                    <div class="list-group-item list-group-item-action ps-7 invoice-item" data-id="${invoice.id}" data-filepath="${invoice.filepath}">
+                                        <i class="bi bi-file-earmark-pdf me-2"></i>${invoice.filename}
+                                    </div>
+                                `;
+                            }
+                            
+                            html += `</div>`;
+                        }
+                        
+                        html += `</div>`;
+                    }
+                    
+                    html += `</div>`;
+                }
+                
+                html += `</div>`;
+            }
+            
+            html += '</div>';
+            
+            // If there are no invoices, show a message
+            if (Object.keys(data).length === 0) {
+                html = `
+                    <div class="alert alert-info m-3">
+                        No invoices found matching the selected filters.
+                    </div>
+                `;
+            }
+            
+            // Update the folder tree
+            folderTree.innerHTML = html;
+            
+            // Add event listeners
+            setupTreeInteraction();
+        }
+        
+        function setupTreeInteraction() {
+            // Toggle collapsible elements
+            document.querySelectorAll('[data-toggle="collapse"]').forEach(item => {
+                item.addEventListener('click', function() {
+                    const target = document.getElementById(this.getAttribute('data-target').substring(1));
+                    if (target.classList.contains('show')) {
+                        target.classList.remove('show');
+                    } else {
+                        target.classList.add('show');
+                    }
+                });
+            });
+            
+            // Handle invoice selection
+            document.querySelectorAll('.invoice-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const invoiceId = this.getAttribute('data-id');
+                    const filePath = this.getAttribute('data-filepath');
+                    
+                    // Highlight the selected item
+                    document.querySelectorAll('.invoice-item').forEach(i => i.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Load the invoice details
+                    loadInvoiceDetails(invoiceId);
+                    
+                    // Show the PDF
+                    if (filePath) {
+                        // Update the document title to show just the filename
+                        const filename = this.textContent.trim();
+                        documentTitle.textContent = filename;
+                        
+                        // Display the PDF
+                        showPDF(filePath);
+                    }
+                });
+            });
+        }
+        
+        function showPDF(filePath) {
+            try {
+                // Check if file path is valid
+                if (!filePath) {
+                    console.error('Invalid file path');
+                    return;
+                }
+                
+                // Show loading indicator
+                loadingIndicator.style.display = 'block';
+                
+                // Handle absolute and relative paths
+                let pdfPath = filePath;
+                
+                // If it's an absolute path or already contains organized_invoices
+                if (pdfPath.includes('organized_invoices')) {
+                    // Use the complete path directly
+                    pdfPath = encodeURIComponent(pdfPath);
+                } else {
+                    // Assume the path is relative to archive dir
+                    // Remove any backslashes and replace with forward slashes
+                    pdfPath = pdfPath.replace(/\\/g, '/');
+                    
+                    // Remove leading/trailing slashes
+                    pdfPath = pdfPath.replace(/^\/|\/$/g, '');
+                    
+                    // Encode the path to handle special characters
+                    pdfPath = encodeURIComponent(pdfPath);
+                }
+                
+                console.log('Loading PDF:', pdfPath);
+                
+                // Set the PDF source - add cache buster to prevent browser caching
+                const timestamp = new Date().getTime();
+                const viewerUrl = `/view-pdf/${pdfPath}?t=${timestamp}`;
+                
+                // Set iframe src and make it visible
+                pdfViewer.src = viewerUrl;
+                pdfViewer.classList.remove('d-none');
+                emptyViewer.style.display = 'none';
+                
+            } catch (error) {
+                console.error('Error showing PDF:', error);
+                loadingIndicator.style.display = 'none';
+                
+                // Display a user-friendly error
+                emptyViewer.innerHTML = `
+                    <div class="alert alert-danger m-3">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        Error displaying PDF: ${error.message}
+                    </div>
+                `;
+                emptyViewer.style.display = 'block';
+                pdfViewer.classList.add('d-none');
+            }
+        }
+        
+        function loadInvoiceDetails(invoiceId) {
+            axios.get(`/api/invoice/${invoiceId}`)
+                .then(response => {
+                    const invoice = response.data.invoice;
+                    
+                    // Update the details
+                    detailInvoiceNumber.textContent = invoice.invoice_number || 'N/A';
+                    detailInvoiceDate.textContent = invoice.invoice_date || 'N/A';
+                    detailSupplier.textContent = invoice.supplier_name || 'N/A';
+                    detailCompany.textContent = invoice.company_name || 'N/A';
+                    detailAmount.textContent = formatCurrency(invoice.amount);
+                    detailVat.textContent = formatCurrency(invoice.vat_amount);
+                    detailDescription.textContent = invoice.description || 'N/A';
+                    
+                    // Show the details card
+                    invoiceDetailsCard.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error loading invoice details:', error);
+                    invoiceDetailsCard.style.display = 'none';
+                });
+        }
+        
+        function formatCurrency(amount) {
+            if (amount === null || amount === undefined) return 'N/A';
+            return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
+        }
+        
+        function applyFilters() {
+            loadInvoices();
+        }
+
+        // Function to build folder tree structure from invoice data
+        function buildFolderTree(invoices) {
+            const tree = {};
+            
+            // Create a hierarchical structure
+            for (const invoice of invoices) {
+                // Skip invoices without file paths
+                if (!invoice.file_path) continue;
+                
+                const company = invoice.company_name || "Unknown";
+                const date = new Date(invoice.normalized_date || invoice.invoice_date || new Date());
+                const year = date.getFullYear().toString();
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const supplier = invoice.supplier_name || "Unknown";
+                
+                // Create nested structure
+                if (!tree[company]) tree[company] = {};
+                if (!tree[company][year]) tree[company][year] = {};
+                if (!tree[company][year][month]) tree[company][year][month] = {};
+                if (!tree[company][year][month][supplier]) tree[company][year][month][supplier] = [];
+                
+                // Add invoice to the structure
+                tree[company][year][month][supplier].push({
+                    id: invoice.id,
+                    filename: invoice.file_path.split('\\').pop().split('/').pop(),
+                    filepath: invoice.file_path
+                });
+            }
+            
+            return tree;
+        }
+        
+        // Render the folder tree
+        function renderFolderTree(data) {
+            updateFolderTree(data);
+        }
+    });
+</script>
+{% endblock %}

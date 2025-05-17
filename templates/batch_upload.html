@@ -1,0 +1,1378 @@
+{% extends "base.html" %}
+
+{% block title %}Batch Upload Invoices - Enterprise Invoice Management{% endblock %}
+
+{% block head %}
+<style>
+    .drop-area {
+        border: 2px dashed #ccc;
+        border-radius: 8px;
+        padding: 60px 20px;
+        text-align: center;
+        background-color: #f8f9fa;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+    
+    .drop-area:hover {
+        background-color: #e9ecef;
+    }
+    
+    .drop-area.highlight {
+        background-color: #e2f3ff;
+        border-color: #0d6efd;
+    }
+    
+    .file-list {
+        margin-top: 20px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .file-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .file-item:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .progress-container {
+        margin-top: 20px;
+    }
+    
+    .upload-progress {
+        height: 25px;
+    }
+    
+    .invoice-card {
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    .pdf-preview {
+        height: 500px;
+        width: 100%;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+    }
+    
+    .log-container {
+        background-color: #212529;
+        color: #f8f9fa;
+        border-radius: 6px;
+        padding: 15px;
+        font-family: monospace;
+        height: 200px;
+        overflow-y: auto;
+        margin-top: 20px;
+    }
+    
+    .log-entry {
+        margin-bottom: 5px;
+        border-bottom: 1px solid #6c757d;
+        padding-bottom: 5px;
+    }
+    
+    .log-primary {
+        color: #0d6efd;
+    }
+    
+    .log-secondary {
+        color: #6c757d;
+    }
+    
+    .log-success {
+        color: #198754;
+    }
+    
+    .log-warning {
+        color: #ffc107;
+    }
+    
+    .log-error {
+        color: #dc3545;
+    }
+    
+    .nav-tabs .nav-link.active {
+        font-weight: bold;
+    }
+    
+    .processing-spinner {
+        display: inline-block;
+        margin-left: 10px;
+        width: 20px;
+        height: 20px;
+    }
+    
+    .result-tabs {
+        margin-top: 20px;
+    }
+    
+    .file-status {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    
+    .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    
+    .status-pending {
+        background-color: #6c757d;
+    }
+    
+    .status-processing {
+        background-color: #0dcaf0;
+        animation: pulse 1.5s infinite;
+    }
+    
+    .status-success {
+        background-color: #198754;
+    }
+    
+    .status-error {
+        background-color: #dc3545;
+    }
+    
+    .status-warning {
+        background-color: #ffc107;
+    }
+    
+    .status-reviewed {
+        background-color: #198754;
+    }
+    
+    .status-needs-review {
+        background-color: #ffc107;
+    }
+    
+    .status-failed {
+        background-color: #dc3545;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+    
+    .pdf-view-status {
+        font-size: 0.75rem;
+        transition: all 0.3s ease;
+    }
+    
+    .pdf-preview-container {
+        position: relative;
+    }
+    
+    .pdf-controls {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        z-index: 100;
+        background-color: rgba(255, 255, 255, 0.8);
+        padding: 5px 10px;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .file-card {
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+    
+    .file-card:hover {
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    
+    .file-card .card-header {
+        padding: 12px 20px;
+        border-bottom: 1px solid rgba(0,0,0,0.125);
+    }
+    
+    .file-error-details {
+        background-color: #f8d7da;
+        border: 1px solid #f5c2c7;
+        border-radius: 4px;
+        padding: 10px;
+        margin-top: 5px;
+        color: #842029;
+        font-size: 0.9rem;
+    }
+    
+    .validate-all-btn {
+        position: sticky;
+        bottom: 20px;
+        margin-top: 20px;
+        z-index: 100;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-cloud-upload-fill me-2"></i>Batch Upload Invoices</h2>
+        <p class="text-muted">Upload PDF invoices for sequential processing and validation</p>
+        <hr>
+    </div>
+</div>
+
+<!-- Main Upload Interface -->
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Upload Documents</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    <strong>Sequential Processing:</strong> Files will be processed one by one, allowing you to validate each invoice before proceeding to the next one.
+                </div>
+                
+                <div id="drop-area" class="drop-area">
+                    <i class="bi bi-cloud-arrow-up" style="font-size: 3rem;"></i>
+                    <h4 class="mt-3">Drag & Drop Files Here</h4>
+                    <p>or</p>
+                    <label for="fileInput" class="btn btn-primary">Select Files</label>
+                    <input type="file" id="fileInput" multiple hidden accept=".pdf">
+                    <div class="mt-2 text-muted">Maximum 20 PDF files</div>
+                </div>
+                
+                <div id="file-list" class="file-list d-none">
+                    <h5>Selected Files:</h5>
+                    <div id="file-items-container"></div>
+                    <div class="d-grid gap-2 mt-3">
+                        <button id="upload-btn" class="btn btn-success">
+                            <i class="bi bi-upload me-2"></i>Start Sequential Processing
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="global-progress" class="progress-container d-none">
+                    <h5>Overall Processing Progress</h5>
+                    <p id="overall-status">Uploading files...</p>
+                    <div class="progress">
+                        <div id="overall-progress" class="progress-bar upload-progress progress-bar-striped progress-bar-animated" 
+                             role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div id="log-section" class="d-none mt-4">
+                    <h5>
+                        <i class="bi bi-terminal me-2"></i>Processing Logs
+                        <button id="clear-logs" class="btn btn-sm btn-outline-secondary float-end">
+                            <i class="bi bi-trash me-1"></i>Clear Logs
+                        </button>
+                    </h5>
+                    <div id="log-container" class="log-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Results Container -->
+<div id="results-container" class="d-none">
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Processing Results</h5>
+                    <div>
+                        <div class="btn-group">
+                            <button id="processing-mode-bulk" class="btn btn-outline-primary active">Bulk Mode</button>
+                            <button id="processing-mode-step" class="btn btn-outline-primary">Step-by-Step</button>
+                        </div>
+                        <button id="validate-all-btn" class="btn btn-success ms-2">
+                            <i class="bi bi-check-circle me-2"></i>Validate All
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info mb-3">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <strong>Important:</strong> Please review and edit the extracted information if needed, then click "Validate All" to save to the database.
+                    </div>
+                    <div id="files-container" class="files-container">
+                        <!-- File cards will be added here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // DOM elements
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('file-list');
+        const fileItemsContainer = document.getElementById('file-items-container');
+        const uploadBtn = document.getElementById('upload-btn');
+        const logSection = document.getElementById('log-section');
+        const logContainer = document.getElementById('log-container');
+        const clearLogsBtn = document.getElementById('clear-logs');
+        const globalProgress = document.getElementById('global-progress');
+        const overallProgress = document.getElementById('overall-progress');
+        const overallStatus = document.getElementById('overall-status');
+        const resultsContainer = document.getElementById('results-container');
+        const validateAllBtn = document.getElementById('validate-all-btn');
+        const filesContainer = document.getElementById('files-container');
+        const bulkModeBtn = document.getElementById('processing-mode-bulk');
+        const stepModeBtn = document.getElementById('processing-mode-step');
+        
+        // State variables
+        let selectedFiles = [];
+        let processedResults = [];
+        let filesStatus = {};
+        let completedCount = 0;
+        let processingMode = 'bulk'; // 'bulk' or 'step'
+        let currentStepIndex = 0;
+        let reviewedFiles = {};
+        
+        // Set up event listeners for processing mode buttons
+        bulkModeBtn.addEventListener('click', function() {
+            if (processingMode !== 'bulk') {
+                processingMode = 'bulk';
+                bulkModeBtn.classList.add('active');
+                stepModeBtn.classList.remove('active');
+                displayAllFileResults();
+            }
+        });
+        
+        stepModeBtn.addEventListener('click', function() {
+            if (processingMode !== 'step') {
+                processingMode = 'step';
+                stepModeBtn.classList.add('active');
+                bulkModeBtn.classList.remove('active');
+                displayStepFileResults();
+            }
+        });
+        
+        // Function to format file size
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' bytes';
+            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            else return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+        
+        // Log functions
+        function addLog(message, type = 'info') {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.innerHTML = `<span>[${new Date().toLocaleTimeString()}]</span> ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Show log section
+            logSection.classList.remove('d-none');
+        }
+        
+        clearLogsBtn.addEventListener('click', function() {
+            logContainer.innerHTML = '';
+        });
+        
+        // Handle drag and drop events
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false);
+        });
+        
+        function highlight() {
+            dropArea.classList.add('highlight');
+        }
+        
+        function unhighlight() {
+            dropArea.classList.remove('highlight');
+        }
+        
+        // Handle file drop
+        dropArea.addEventListener('drop', handleDrop, false);
+        
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            handleFiles(files);
+        }
+        
+        // Handle file selection through button
+        fileInput.addEventListener('change', function() {
+            handleFiles(this.files);
+        });
+        
+        function handleFiles(files) {
+            // Convert FileList to array and filter PDFs
+            const fileArray = Array.from(files).filter(file => file.type === 'application/pdf');
+            
+            if (fileArray.length === 0) {
+                alert('Please select PDF files only');
+                return;
+            }
+            
+            // Limit to 20 files
+            if (fileArray.length > 20) {
+                alert('Please select a maximum of 20 files');
+                const truncated = fileArray.slice(0, 20);
+                selectedFiles = truncated;
+                addLog(`Limited selection to 20 files (max allowed)`, 'warning');
+            } else {
+                selectedFiles = fileArray;
+                addLog(`Selected ${fileArray.length} files for upload`, 'info');
+            }
+            
+            // Update UI
+            updateFileList();
+        }
+        
+        function updateFileList() {
+            // Clear the list
+            fileItemsContainer.innerHTML = '';
+            
+            // Add each file to the list
+            selectedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div>
+                        <i class="bi bi-file-earmark-pdf me-2"></i>
+                        <span>${file.name}</span>
+                        <small class="text-muted ms-2">${formatFileSize(file.size)}</small>
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger remove-file" data-index="${index}">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                `;
+                fileItemsContainer.appendChild(fileItem);
+                
+                // Initialize status tracking for this file
+                filesStatus[file.name] = 'pending';
+            });
+            
+            // Show the file list if files are selected
+            if (selectedFiles.length > 0) {
+                fileList.classList.remove('d-none');
+            } else {
+                fileList.classList.add('d-none');
+            }
+            
+            // Add event listeners to remove buttons
+            document.querySelectorAll('.remove-file').forEach(button => {
+                button.addEventListener('click', function() {
+                    const index = parseInt(this.dataset.index);
+                    const fileName = selectedFiles[index].name;
+                    selectedFiles.splice(index, 1);
+                    delete filesStatus[fileName];
+                    updateFileList();
+                    addLog(`Removed file: ${fileName}`, 'secondary');
+                });
+            });
+        }
+        
+        // Handle upload button click - Modified to use sequential API
+        uploadBtn.addEventListener('click', uploadFiles);
+        
+        function uploadFiles() {
+            if (selectedFiles.length === 0) {
+                alert('Please select at least one file');
+                return;
+            }
+            
+            // Reset completion counter
+            completedCount = 0;
+            
+            // Show progress and logs
+            globalProgress.classList.remove('d-none');
+            logSection.classList.remove('d-none');
+            overallProgress.style.width = '0%';
+            overallStatus.textContent = 'Validating files...';
+            
+            // Hide file list and drop area during processing
+            fileList.classList.add('d-none');
+            dropArea.classList.add('d-none');
+            
+            // Clear any previous logs
+            logContainer.innerHTML = '';
+            addLog('Starting pre-validation process...', 'primary');
+            
+            // First validate all files before full processing
+            const validationPromises = selectedFiles.map(file => {
+                // Create FormData for validation
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('validation_only', 'true');
+                
+                addLog(`Validating file: ${file.name}`, 'info');
+                
+                return axios.post('/api/validate-upload', formData, {
+                    headers: {'Content-Type': 'multipart/form-data'}
+                })
+                .then(response => {
+                    if (response.data.is_duplicate) {
+                        addLog(`⚠️ ${file.name}: Already exists in database (${response.data.invoice_number || 'unknown invoice number'})`, 'warning');
+                        return { file, valid: false, reason: 'duplicate', error: response.data.error, temp_file_path: null };
+                    }
+                    
+                    // Check if data was extracted - if so, include it
+                    const extractedData = response.data.extracted_data || null;
+                    
+                    addLog(`✓ ${file.name}: Validation passed`, 'success');
+                    return { 
+                        file, 
+                        valid: true, 
+                        temp_file_path: response.data.temp_file_path,
+                        original_filename: file.name,
+                        extracted_data: extractedData 
+                    };
+                })
+                .catch(error => {
+                    addLog(`❌ ${file.name}: Validation failed - ${error.response?.data?.error || error.message}`, 'error');
+                    return { file, valid: false, reason: 'error', error: error.response?.data?.error || error.message, temp_file_path: null };
+                });
+            });
+            
+            // Process validation results
+            Promise.all(validationPromises)
+                .then(validationResults => {
+                    const validFiles = validationResults.filter(result => result.valid);
+                    const invalidFiles = validationResults.filter(result => !result.valid);
+                    
+                    // Show validation summary
+                    const totalFiles = validationResults.length;
+                    const validCount = validFiles.length;
+                    
+                    addLog(`Validation complete: ${validCount}/${totalFiles} files passed validation`, 'primary');
+                    
+                    if (invalidFiles.length > 0) {
+                        addLog(`${invalidFiles.length} file(s) failed validation:`, 'warning');
+                        invalidFiles.forEach(result => {
+                            const reason = result.reason === 'duplicate' ? 'Duplicate invoice' : 'Error';
+                            addLog(`- ${result.file.name}: ${reason} - ${result.error}`, 'warning');
+                        });
+                    }
+                    
+                    if (validFiles.length === 0) {
+                        overallStatus.textContent = 'No valid files to process!';
+                        addLog('No valid files to process. Please upload different files.', 'error');
+                        
+                        // Show drop area again for retrying
+                        dropArea.classList.remove('d-none');
+                        overallProgress.style.width = '100%';
+                        overallProgress.classList.remove('progress-bar-animated');
+                        overallProgress.classList.add('bg-danger');
+                        return;
+                    }
+                    
+                    // Confirm proceeding with valid files
+                    const confirmMessage = invalidFiles.length > 0 ? 
+                        `${invalidFiles.length} file(s) failed validation. Proceed with uploading the ${validFiles.length} valid files?` :
+                        `All ${validFiles.length} files passed validation. Ready to process with AI extraction?`;
+                        
+                    if (!confirm(confirmMessage)) {
+                        overallStatus.textContent = 'Upload cancelled';
+                        addLog('Upload cancelled by user', 'secondary');
+                        
+                        // Show drop area again
+                        dropArea.classList.remove('d-none');
+                        overallProgress.style.width = '0%';
+                        return;
+                    }
+                    
+                    // Proceed with uploading valid files
+                    addLog(`Proceeding with AI extraction for ${validFiles.length} valid files...`, 'primary');
+                    
+                    // Create FormData for batch upload with validated files
+                    const processFormData = new FormData();
+                    validFiles.forEach(result => {
+                        // Use the temp file path instead of re-uploading the file
+                        processFormData.append('temp_file_paths[]', result.temp_file_path);
+                        processFormData.append('original_filenames[]', result.file.name);
+                    });
+                    
+                    // Upload validated files using the sequential API endpoint
+                    overallStatus.textContent = 'Processing with AI extraction...';
+                    
+                    axios.post('/api/batch-upload-sequential', processFormData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        },
+                        onUploadProgress: progressEvent => {
+                            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                            overallProgress.style.width = `${percentCompleted}%`;
+                        }
+                    })
+                    .then(response => {
+                        // Update progress to 100%
+                        overallProgress.style.width = '100%';
+                        overallStatus.textContent = 'Files processed successfully!';
+                        addLog('Files processed successfully. Ready for human validation...', 'success');
+                        
+                        // Process the returned data
+                        if (response.data.files && response.data.files.length > 0) {
+                            processedResults = response.data.files;
+                            
+                            // Display the results for validation
+                            resultsContainer.classList.remove('d-none');
+                            
+                            if (processingMode === 'bulk') {
+                                displayAllFileResults();
+                            } else {
+                                displayStepFileResults();
+                            }
+                        } else if (response.data.batch_id) {
+                            // Redirect to sequential validation page
+                            addLog('Redirecting to sequential validation page...', 'info');
+                            setTimeout(() => {
+                                window.location.href = response.data.redirect || `/sequential-validate/${response.data.batch_id}`;
+                            }, 1000);
+                        }
+                    })
+                    .catch(error => {
+                        overallStatus.textContent = 'Error during processing!';
+                        overallProgress.classList.remove('progress-bar-animated');
+                        overallProgress.classList.add('bg-danger');
+                        
+                        addLog(`Error processing files: ${error.response?.data?.error || error.message}`, 'error');
+                        alert('Error processing files: ' + (error.response?.data?.error || error.message));
+                        
+                        // Show drop area again for retrying
+                        dropArea.classList.remove('d-none');
+                    });
+                })
+                .catch(error => {
+                    overallStatus.textContent = 'Error during validation!';
+                    overallProgress.classList.remove('progress-bar-animated');
+                    overallProgress.classList.add('bg-danger');
+                    
+                    addLog(`Error during validation: ${error.message}`, 'error');
+                    alert('Error during validation: ' + error.message);
+                    
+                    // Show drop area again for retrying
+                    dropArea.classList.remove('d-none');
+                });
+        }
+        
+        // Display all files in bulk mode
+        function displayAllFileResults() {
+            filesContainer.innerHTML = '';
+            
+            if (!processedResults || processedResults.length === 0) {
+                filesContainer.innerHTML = '<div class="alert alert-info">No files processed</div>';
+                return;
+            }
+            
+            // Create cards for all files
+            processedResults.forEach((result, index) => {
+                createFileCard(result, index);
+            });
+            
+            // Show validate all button
+            validateAllBtn.style.display = 'inline-block';
+        }
+        
+        // Display files one at a time in step mode
+        function displayStepFileResults() {
+            filesContainer.innerHTML = '';
+            
+            if (!processedResults || processedResults.length === 0) {
+                filesContainer.innerHTML = '<div class="alert alert-info">No files processed</div>';
+                return;
+            }
+            
+            if (currentStepIndex >= processedResults.length) {
+                // All files have been reviewed
+                filesContainer.innerHTML = `
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        All files have been reviewed! Click "Validate All" to finalize.
+                    </div>
+                `;
+                return;
+            }
+            
+            // Create card for the current file only
+            createFileCard(processedResults[currentStepIndex], currentStepIndex);
+            
+            // Add navigation buttons for step mode
+            const navButtons = document.createElement('div');
+            navButtons.className = 'd-flex justify-content-between mt-4';
+            navButtons.innerHTML = `
+                <button class="btn btn-outline-secondary ${currentStepIndex === 0 ? 'disabled' : ''}" 
+                    id="prev-file-btn" ${currentStepIndex === 0 ? 'disabled' : ''}>
+                    <i class="bi bi-arrow-left me-2"></i>Previous File
+                </button>
+                <div class="text-center">
+                    <span class="badge bg-primary">${currentStepIndex + 1} of ${processedResults.length}</span>
+                </div>
+                <button class="btn btn-primary" id="next-file-btn">
+                    ${currentStepIndex === processedResults.length - 1 ? 'Finish Review' : 'Next File'}
+                    <i class="bi bi-arrow-right ms-2"></i>
+                </button>
+            `;
+            filesContainer.appendChild(navButtons);
+            
+            // Add event listeners for the navigation buttons
+            document.getElementById('prev-file-btn').addEventListener('click', function() {
+                if (currentStepIndex > 0) {
+                    currentStepIndex--;
+                    displayStepFileResults();
+                }
+            });
+            
+            document.getElementById('next-file-btn').addEventListener('click', function() {
+                // Mark the current file as reviewed if not already
+                const currentFile = processedResults[currentStepIndex];
+                const fileName = currentFile.filename || currentFile.file_path.split('\\').pop().split('/').pop();
+                
+                if (!reviewedFiles[fileName]) {
+                    reviewedFiles[fileName] = true;
+                    
+                    // Update status indicator to reviewed
+                    const statusIndicator = document.querySelector(`.file-card[data-index="${currentStepIndex}"] .status-indicator`);
+                    if (statusIndicator) {
+                        statusIndicator.className = 'status-indicator status-reviewed';
+                    }
+                    
+                    // Update badge text
+                    const statusBadge = document.querySelector(`.file-card[data-index="${currentStepIndex}"] .status-badge`);
+                    if (statusBadge) {
+                        statusBadge.textContent = 'Reviewed';
+                        statusBadge.className = 'badge bg-success status-badge';
+                    }
+                }
+                
+                // Go to next file or finish
+                if (currentStepIndex < processedResults.length - 1) {
+                    currentStepIndex++;
+                    displayStepFileResults();
+                } else {
+                    // We're on the last file, finish review
+                    currentStepIndex = processedResults.length;
+                    displayStepFileResults();
+                }
+            });
+        }
+        
+        // Create a card for a processed file
+        function createFileCard(result, index) {
+            const fileName = result.filename || result.file_path?.split('\\').pop().split('/').pop() || 'Unknown File';
+            
+            // Create card for this file
+            const fileCard = document.createElement('div');
+            fileCard.className = 'file-card card mb-4';
+            fileCard.dataset.index = index;
+            
+            // Determine file status
+            let statusClass = 'status-needs-review';
+            let statusText = 'Needs Human Validation';
+            let badgeClass = 'bg-primary';
+            
+            if (reviewedFiles[fileName]) {
+                statusClass = 'status-reviewed';
+                statusText = 'Reviewed & Validated';
+                badgeClass = 'bg-success';
+            } else if (result.success === false) {
+                if (result.is_duplicate) {
+                    statusClass = 'status-warning';
+                    statusText = 'Potential Duplicate';
+                    badgeClass = 'bg-warning text-dark';
+                } else {
+                    statusClass = 'status-failed';
+                    statusText = 'Processing Failed';
+                    badgeClass = 'bg-danger';
+                }
+            }
+            
+            // Create card header with human validation notice
+            const cardHeader = document.createElement('div');
+            cardHeader.className = 'card-header';
+            cardHeader.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <span class="status-indicator ${statusClass}" title="${statusText}"></span>
+                        ${fileName}
+                    </h5>
+                    <span class="badge ${badgeClass} status-badge">${statusText}</span>
+                </div>
+                <div class="validation-status alert alert-info mt-2 mb-0">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-person-check-fill me-2"></i>
+                        <div>
+                            <strong>Human Validation Required</strong>
+                            <p class="mb-0">This data has been extracted by AI and needs your review. No information has been saved to the database yet.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            fileCard.appendChild(cardHeader);
+            
+            // Create card body
+            const cardBody = document.createElement('div');
+            cardBody.className = 'card-body';
+            
+            // If there was an error and not a duplicate, show error message
+            if (result.success === false && !result.is_duplicate) {
+                cardBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        <p><strong>Error:</strong> ${result.error}</p>
+                    </div>
+                    <div class="mt-3">
+                        <a href="/upload" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> Upload Individually
+                        </a>
+                    </div>
+                `;
+            } else {
+                // Create row for PDF preview and form
+                const row = document.createElement('div');
+                row.className = 'row';
+                
+                // PDF preview column
+                const pdfCol = document.createElement('div');
+                pdfCol.className = 'col-md-6';
+                
+                // Only show PDF if we have a path
+                if (result.file_path || result.preview_path) {
+                    const pdfPath = result.preview_path || result.file_path;
+                    
+                    pdfCol.innerHTML = `
+                        <div class="invoice-preview-container">
+                            <iframe 
+                                src="/view-pdf/${encodeURIComponent(pdfPath)}" 
+                                width="100%" 
+                                height="500px" 
+                                class="pdf-preview"
+                                style="border: 1px solid #dee2e6; border-radius: 4px;">
+                            </iframe>
+                        </div>
+                    `;
+                } else {
+                    pdfCol.innerHTML = `
+                        <div class="alert alert-warning">
+                            PDF preview not available
+                        </div>
+                    `;
+                }
+                
+                // Form column
+                const formCol = document.createElement('div');
+                formCol.className = 'col-md-6';
+                
+                // Extract data from the result with better field mapping
+                let extractedData = {};
+                
+                // Function to safely get a field value from multiple possible sources
+                function getFieldValue(obj, fieldOptions) {
+                    if (!obj) return '';
+                    
+                    // Try to find the field in the provided object
+                    for (const field of fieldOptions) {
+                        if (obj[field] !== undefined && obj[field] !== null && obj[field] !== '') {
+                            return obj[field];
+                        }
+                    }
+                    
+                    // Check if there's extracted_data or data field
+                    if (obj.extracted_data) {
+                        return getFieldValue(
+                            typeof obj.extracted_data === 'string' ? 
+                                JSON.parse(obj.extracted_data) : 
+                                obj.extracted_data,
+                            fieldOptions
+                        );
+                    }
+                    
+                    if (obj.data) {
+                        return getFieldValue(obj.data, fieldOptions);
+                    }
+                    
+                    return '';
+                }
+                
+                // Try to access data from multiple possible locations
+                let dataSource = result;
+                if (result.data) dataSource = result.data;
+                if (result.extracted_data) {
+                    if (typeof result.extracted_data === 'string') {
+                        try {
+                            dataSource = JSON.parse(result.extracted_data);
+                        } catch (e) {
+                            console.error("Error parsing extracted_data JSON:", e);
+                        }
+                    } else {
+                        dataSource = result.extracted_data;
+                    }
+                }
+                
+                console.log("Data source for form:", dataSource);
+                
+                // Get values using various possible field names
+                const invoiceNumber = getFieldValue(dataSource, [
+                    'invoice_number', 'Rechnungsnummer', 'invoiceNumber'
+                ]);
+                
+                const invoiceDate = getFieldValue(dataSource, [
+                    'invoice_date', 'Rechnungsdatum', 'invoiceDate', 'date', 'Datum'
+                ]);
+                
+                const amount = getFieldValue(dataSource, [
+                    'amount', 'Gesamtbetrag', 'totalAmount', 'total'
+                ]);
+                
+                const vatAmount = getFieldValue(dataSource, [
+                    'vat_amount', 'Mehrwertsteuerbetrag', 'vatAmount', 'tax'
+                ]);
+                
+                const supplierName = getFieldValue(dataSource, [
+                    'supplier_name', 'Lieferantename', 'supplierName', 'vendor'
+                ]);
+                
+                const companyName = getFieldValue(dataSource, [
+                    'company_name', 'Empfängerfirma', 'companyName', 'recipient'
+                ]);
+                
+                const description = getFieldValue(dataSource, [
+                    'description', 'Leistungsbeschreibung', 'details'
+                ]);
+                
+                // Format invoice date for input field (if it's a valid date)
+                let formattedDate = '';
+                try {
+                    if (invoiceDate) {
+                        // Try to parse the date string in various formats
+                        const dateObj = new Date(invoiceDate);
+                        if (!isNaN(dateObj.getTime())) {
+                            // Format as YYYY-MM-DD for date input
+                            formattedDate = dateObj.toISOString().split('T')[0];
+                        } else {
+                            formattedDate = invoiceDate;
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error formatting date:", e);
+                    formattedDate = invoiceDate; // Use original value if parsing fails
+                }
+                
+                // Create form with extracted data
+                const form = document.createElement('form');
+                form.className = 'validation-form';
+                form.dataset.index = index;
+                
+                // If we have a pending ID, store it
+                if (result.pending_id) {
+                    form.dataset.pendingId = result.pending_id;
+                }
+                
+                // Create form fields for extracted data
+                form.innerHTML = `
+                    <div class="mb-3">
+                        <label class="form-label">Invoice Number</label>
+                        <input type="text" class="form-control" name="invoice_number" value="${invoiceNumber || ''}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Invoice Date</label>
+                        <input type="text" class="form-control" name="invoice_date" value="${formattedDate || invoiceDate || ''}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Amount</label>
+                        <div class="input-group">
+                            <span class="input-group-text">€</span>
+                            <input type="text" class="form-control" name="amount" value="${amount || ''}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">VAT Amount</label>
+                        <div class="input-group">
+                            <span class="input-group-text">€</span>
+                            <input type="text" class="form-control" name="vat_amount" value="${vatAmount || ''}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Supplier Name</label>
+                        <input type="text" class="form-control" name="supplier_name" value="${supplierName || ''}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Company Name</label>
+                        <input type="text" class="form-control" name="company_name" value="${companyName || ''}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" name="description" rows="3">${description || ''}</textarea>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="form-check">
+                            <input class="form-check-input mark-reviewed-checkbox" type="checkbox" id="markReviewed${index}">
+                            <label class="form-check-label" for="markReviewed${index}">
+                                Mark as validated
+                            </label>
+                        </div>
+                        <button type="button" class="btn btn-outline-danger remove-file-btn" data-index="${index}">
+                            <i class="bi bi-trash me-1"></i>Remove
+                        </button>
+                    </div>
+                `;
+                
+                // Add form to column
+                formCol.appendChild(form);
+                
+                // Add event listener for review checkbox
+                setTimeout(() => {
+                    const checkbox = document.getElementById(`markReviewed${index}`);
+                    if (checkbox) {
+                        checkbox.checked = !!reviewedFiles[fileName];
+                        checkbox.addEventListener('change', function() {
+                            if (this.checked) {
+                                reviewedFiles[fileName] = true;
+                                
+                                // Update status indicator
+                                const statusIndicator = document.querySelector(`.file-card[data-index="${index}"] .status-indicator`);
+                                if (statusIndicator) {
+                                    statusIndicator.className = 'status-indicator status-reviewed';
+                                }
+                                
+                                // Update badge
+                                const statusBadge = document.querySelector(`.file-card[data-index="${index}"] .status-badge`);
+                                if (statusBadge) {
+                                    statusBadge.textContent = 'Reviewed & Validated';
+                                    statusBadge.className = 'badge bg-success status-badge';
+                                }
+                                
+                                // Update the validation status alert
+                                const validationAlert = document.querySelector(`.file-card[data-index="${index}"] .validation-status`);
+                                if (validationAlert) {
+                                    validationAlert.className = 'validation-status alert alert-success mt-2 mb-0';
+                                    validationAlert.innerHTML = `
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-check-circle-fill me-2"></i>
+                                            <div>
+                                                <strong>Validated by Human</strong>
+                                                <p class="mb-0">You have reviewed and validated this data. It will be saved to the database when you click "Validate All".</p>
+                                            </div>
+                                        </div>
+                                    `;
+                                }
+                            } else {
+                                delete reviewedFiles[fileName];
+                                
+                                // Reset status indicator and badge
+                                updateFileStatus(result, index);
+                                
+                                // Reset the validation status alert
+                                const validationAlert = document.querySelector(`.file-card[data-index="${index}"] .validation-status`);
+                                if (validationAlert) {
+                                    validationAlert.className = 'validation-status alert alert-info mt-2 mb-0';
+                                    validationAlert.innerHTML = `
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-person-check-fill me-2"></i>
+                                            <div>
+                                                <strong>Human Validation Required</strong>
+                                                <p class="mb-0">This data has been extracted by AI and needs your review. No information has been saved to the database yet.</p>
+                                            </div>
+                                        </div>
+                                    `;
+                                }
+                            }
+                        });
+                    }
+                    
+                    // Add event listener for remove button
+                    const removeBtn = document.querySelector(`.file-card[data-index="${index}"] .remove-file-btn`);
+                    if (removeBtn) {
+                        removeBtn.addEventListener('click', function() {
+                            // Remove this file from processedResults
+                            processedResults.splice(index, 1);
+                            delete reviewedFiles[fileName];
+                            
+                            // Re-display results
+                            if (processingMode === 'bulk') {
+                                displayAllFileResults();
+                            } else {
+                                // Adjust currentStepIndex if needed
+                                if (currentStepIndex >= processedResults.length) {
+                                    currentStepIndex = Math.max(0, processedResults.length - 1);
+                                }
+                                displayStepFileResults();
+                            }
+                            
+                            addLog(`Removed file: ${fileName}`, 'secondary');
+                        });
+                    }
+                }, 0);
+                
+                // Add columns to row and row to card body
+                row.appendChild(pdfCol);
+                row.appendChild(formCol);
+                cardBody.appendChild(row);
+            }
+            
+            fileCard.appendChild(cardBody);
+            filesContainer.appendChild(fileCard);
+        }
+        
+        // Update status indicators for a file
+        function updateFileStatus(result, index) {
+            const fileName = result.filename || result.file_path.split('\\').pop().split('/').pop();
+            const statusIndicator = document.querySelector(`.file-card[data-index="${index}"] .status-indicator`);
+            const statusBadge = document.querySelector(`.file-card[data-index="${index}"] .status-badge`);
+            
+            if (!statusIndicator || !statusBadge) return;
+            
+            // Determine file status
+            let statusClass = 'status-success';
+            let statusText = 'Processed Successfully';
+            let badgeClass = 'bg-success';
+            
+            if (reviewedFiles[fileName]) {
+                statusClass = 'status-reviewed';
+                statusText = 'Reviewed';
+                badgeClass = 'bg-success';
+            } else if (result.success === false) {
+                if (result.is_duplicate) {
+                    statusClass = 'status-warning';
+                    statusText = 'Potential Duplicate';
+                    badgeClass = 'bg-warning text-dark';
+                } else {
+                    statusClass = 'status-failed';
+                    statusText = 'Processing Failed';
+                    badgeClass = 'bg-danger';
+                }
+            } else if (result.needs_manual_input || (result.confidence && result.confidence < 0.8)) {
+                statusClass = 'status-needs-review';
+                statusText = 'Needs Review';
+                badgeClass = 'bg-warning text-dark';
+            }
+            
+            statusIndicator.className = `status-indicator ${statusClass}`;
+            statusBadge.textContent = statusText;
+            statusBadge.className = `badge ${badgeClass} status-badge`;
+        }
+        
+        // Function to mark a file as reviewed when PDF is viewed
+        window.markFileReviewed = function(index) {
+            const result = processedResults[index];
+            if (!result) return;
+            
+            const fileName = result.filename || result.file_path.split('\\').pop().split('/').pop();
+            
+            // Find the checkbox and check it
+            const checkbox = document.getElementById(`markReviewed${index}`);
+            if (checkbox && !checkbox.checked) {
+                // We don't auto-check the box, but we could if desired
+                // checkbox.checked = true;
+                // reviewedFiles[fileName] = true;
+                // updateFileStatus(result, index);
+            }
+            
+            // Find form and get pending ID
+            const form = document.querySelector(`.validation-form[data-index="${index}"]`);
+            if (form && form.dataset.pendingId) {
+                // Make API call to mark as viewed on the server
+                axios.post(`/api/mark-viewed/${form.dataset.pendingId}`)
+                    .then(response => {
+                        console.log(`Marked invoice ${form.dataset.pendingId} as viewed`);
+                    })
+                    .catch(error => {
+                        console.error(`Error marking invoice as viewed: ${error}`);
+                    });
+            }
+        };
+        
+        // Handle validate all button click
+        validateAllBtn.addEventListener('click', validateAllInvoices);
+        
+        function validateAllInvoices() {
+            // Collect form data from all invoices
+            const formData = [];
+            let batchId = null;
+            const selectedFiles = {}; // Track selected files explicitly
+            let anyFilesSelected = false;
+            
+            // Check if any files have been explicitly selected/reviewed
+            document.querySelectorAll('.mark-reviewed-checkbox').forEach(checkbox => {
+                if (checkbox.checked) {
+                    anyFilesSelected = true;
+                    const index = parseInt(checkbox.id.replace('markReviewed', ''));
+                    selectedFiles[index] = true;
+                }
+            });
+            
+            // Process forms based on selection status
+            document.querySelectorAll('.validation-form').forEach(form => {
+                const index = parseInt(form.dataset.index);
+                const result = processedResults[index];
+                if (!result) return;
+                
+                // If files are selected, only process selected ones. Otherwise, process all
+                if (!anyFilesSelected || selectedFiles[index]) {
+                    const data = {};
+                    
+                    // Get all form fields
+                    form.querySelectorAll('input:not([type="checkbox"]), textarea').forEach(input => {
+                        data[input.name] = input.value;
+                    });
+                    
+                    // Check for pending ID
+                    const pendingId = form.dataset.pendingId;
+                    if (pendingId) {
+                        data.pending_id = pendingId;
+                        // Set batch ID if not set yet
+                        if (!batchId && result.batch_id) {
+                            batchId = result.batch_id;
+                        }
+                    } else {
+                        // Legacy support
+                        data.file_path = result.data?.organized_file_path || '';
+                        data.original_path = result.file_path || '';
+                    }
+                    
+                    formData.push(data);
+                }
+            });
+            
+            // Check if any invoices to submit
+            if (formData.length === 0) {
+                alert('No valid invoices to submit');
+                return;
+            }
+            
+            // Submit all invoices
+            validateAllBtn.disabled = true;
+            validateAllBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Validating...';
+            
+            addLog(`Submitting ${formData.length} invoices to database...`, 'primary');
+            
+            if (batchId) {
+                // Use the batch finalization API
+                axios.post('/api/finalize-batch', { 
+                    batch_id: batchId,
+                    validated_files: formData
+                })
+                .then(response => {
+                    addLog(`Successfully finalized batch: ${response.data.message}`, 'success');
+                    
+                    // Update button to show success
+                    validateAllBtn.disabled = true;
+                    validateAllBtn.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Validation Complete';
+                    validateAllBtn.classList.remove('btn-success');
+                    validateAllBtn.classList.add('btn-outline-success');
+                    
+                    alert('Invoices validated and saved successfully!');
+                    
+                    // Redirect to browser page after a short delay
+                    setTimeout(() => {
+                        resetPage();
+                    }, 1500);
+                })
+                .catch(error => {
+                    addLog(`Error validating invoices: ${error.response?.data?.error || error.message}`, 'error');
+                    alert('Error validating invoices: ' + (error.response?.data?.error || error.message));
+                    validateAllBtn.disabled = false;
+                    validateAllBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Validate All';
+                });
+            } else {
+                // Legacy approach - submit all invoice data directly
+                axios.post('/api/submit-batch', { invoices: formData })
+                .then(response => {
+                    addLog(`Successfully validated ${response.data.success_count || response.data.message.split(' ')[2]} invoices`, 'success');
+                    
+                    if (response.data.errors && response.data.errors.length > 0) {
+                        response.data.errors.forEach(error => {
+                            addLog(`Error validating invoice ${error.invoice}: ${error.error}`, 'error');
+                        });
+                    }
+                    
+                    // Update button to show success
+                    validateAllBtn.disabled = true;
+                    validateAllBtn.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Validation Complete';
+                    validateAllBtn.classList.remove('btn-success');
+                    validateAllBtn.classList.add('btn-outline-success');
+                    
+                    alert('Invoices validated and saved successfully!');
+                    
+                    // Reset the page after a short delay
+                    setTimeout(() => {
+                        resetPage();
+                    }, 1500);
+                })
+                .catch(error => {
+                    addLog(`Error validating invoices: ${error.response?.data?.error || error.message}`, 'error');
+                    alert('Error validating invoices: ' + (error.response?.data?.error || error.message));
+                    validateAllBtn.disabled = false;
+                    validateAllBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Validate All';
+                });
+            }
+        }
+        
+        // Function to reset the page to initial state
+        function resetPage() {
+            // Reset UI elements
+            dropArea.classList.remove('d-none');
+            fileList.classList.add('d-none');
+            globalProgress.classList.add('d-none');
+            resultsContainer.classList.add('d-none');
+            
+            // Reset state variables
+            selectedFiles = [];
+            processedResults = [];
+            filesStatus = {};
+            reviewedFiles = {};
+            currentStepIndex = 0;
+            
+            // Clear the uploaded files display
+            fileItemsContainer.innerHTML = '';
+            
+            // Clear processed results
+            filesContainer.innerHTML = '';
+            
+            // Re-enable buttons
+            uploadBtn.disabled = false;
+            validateAllBtn.disabled = false;
+            validateAllBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Validate All';
+            validateAllBtn.classList.remove('btn-outline-success');
+            validateAllBtn.classList.add('btn-success');
+            
+            // Reset processing mode
+            processingMode = 'bulk';
+            bulkModeBtn.classList.add('active');
+            stepModeBtn.classList.remove('active');
+            
+            // Clear log
+            addLog('Page reset - ready for new batch', 'secondary');
+        }
+    });
+</script>
+{% endblock %} 

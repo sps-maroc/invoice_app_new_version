@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Invoice{% endblock %}
+
+{% block styles %}
+<style>
+    .modal-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+    
+    .modal-content {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        width: 95%;
+        height: 95%;
+        display: flex;
+        flex-direction: row;
+        gap: 20px;
+    }
+    
+    .modal-close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: white;
+    }
+    
+    .pdf-container {
+        flex: 1;
+        min-width: 45%;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+        background: #f5f5f5;
+        position: relative;
+    }
+    
+    .pdf-viewer {
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+    
+    .form-container {
+        flex: 1;
+        padding: 20px;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow-y: auto;
+    }
+    
+    .form-group {
+        margin-bottom: 1rem;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+    }
+    
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    .form-group input:focus,
+    .form-group textarea:focus {
+        border-color: #007bff;
+        outline: none;
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    }
+    
+    .required::after {
+        content: "*";
+        color: red;
+        margin-left: 4px;
+    }
+    
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .error-display {
+        text-align: center;
+        padding: 20px;
+    }
+    
+    .error-icon {
+        font-size: 48px;
+        color: #dc3545;
+        margin-bottom: 10px;
+    }
+    
+    .retry-button {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 10px;
+    }
+    
+    .retry-button:hover {
+        background: #0056b3;
+    }
+    
+    .actions {
+        margin-top: 20px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+    
+    .btn {
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+        border: none;
+    }
+    
+    .btn-save {
+        background: #28a745;
+        color: white;
+    }
+    
+    .btn-save:hover {
+        background: #218838;
+    }
+    
+    .btn-cancel {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .btn-cancel:hover {
+        background: #5a6268;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="modal-container">
+    <button class="modal-close" onclick="window.history.back()">&times;</button>
+    <div class="modal-content">
+        <div class="pdf-container">
+            <div id="loadingOverlay" class="loading-overlay">
+                <div class="loading-spinner"></div>
+                <div>Loading PDF...</div>
+            </div>
+            <div id="errorDisplay" class="loading-overlay" style="display: none;">
+                <div class="error-icon">⚠️</div>
+                <div>Failed to load PDF</div>
+                <div id="errorMessage" style="color: #dc3545; margin: 10px 0;"></div>
+                <button class="retry-button" onclick="retryLoadPDF()">Retry</button>
+            </div>
+            <iframe id="pdfViewer" class="pdf-viewer" style="display: none;"></iframe>
+        </div>
+        
+        <div class="form-container">
+            <h2>Edit Invoice Details</h2>
+            <form id="invoiceForm">
+                <div class="form-group">
+                    <label class="required" for="invoiceNumber">Invoice Number</label>
+                    <input type="text" id="invoiceNumber" name="invoice_number" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="required" for="invoiceDate">Invoice Date</label>
+                    <input type="text" id="invoiceDate" name="invoice_date" placeholder="DD.MM.YYYY" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="required" for="totalAmount">Total Amount</label>
+                    <input type="text" id="totalAmount" name="amount" placeholder="0,00" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="vatAmount">VAT Amount</label>
+                    <input type="text" id="vatAmount" name="vat_amount" placeholder="0,00">
+                </div>
+                
+                <div class="form-group">
+                    <label class="required" for="vendorName">Vendor Name</label>
+                    <input type="text" id="vendorName" name="supplier_name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="companyName">Company Name</label>
+                    <input type="text" id="companyName" name="company_name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <textarea id="description" name="description"></textarea>
+                </div>
+                
+                <div class="actions">
+                    <button type="button" class="btn btn-cancel" onclick="window.history.back()">Cancel</button>
+                    <button type="submit" class="btn btn-save">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const invoiceId = "{{ invoice_id|safe }}";
+    let originalData = {};
+    let pdfUrl = '';
+    
+    function loadPDF(url) {
+        const pdfViewer = document.getElementById('pdfViewer');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const errorDisplay = document.getElementById('errorDisplay');
+        const errorMessage = document.getElementById('errorMessage');
+        
+        // Show loading state
+        loadingOverlay.style.display = 'flex';
+        errorDisplay.style.display = 'none';
+        pdfViewer.style.display = 'none';
+        
+        // Load the PDF
+        pdfViewer.onload = function() {
+            loadingOverlay.style.display = 'none';
+            errorDisplay.style.display = 'none';
+            pdfViewer.style.display = 'block';
+        };
+        
+        pdfViewer.onerror = function() {
+            loadingOverlay.style.display = 'none';
+            errorDisplay.style.display = 'flex';
+            pdfViewer.style.display = 'none';
+            errorMessage.textContent = 'Could not load the PDF file. Please try again.';
+        };
+        
+        // Add cache-busting parameter
+        const urlWithCache = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+        pdfViewer.src = urlWithCache;
+    }
+    
+    window.retryLoadPDF = function() {
+        if (pdfUrl) {
+            loadPDF(pdfUrl);
+        }
+    };
+    
+    // Load invoice data
+    fetch(`/api/pending-invoice/${invoiceId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.invoice) {
+                const invoice = data.invoice;
+                originalData = invoice;
+                
+                // Fill form fields
+                document.getElementById('invoiceNumber').value = invoice.invoice_number || '';
+                document.getElementById('invoiceDate').value = formatDateForDisplay(invoice.invoice_date);
+                document.getElementById('totalAmount').value = formatNumber(invoice.amount);
+                document.getElementById('vatAmount').value = formatNumber(invoice.vat_amount);
+                document.getElementById('vendorName').value = invoice.supplier_name || '';
+                document.getElementById('companyName').value = invoice.company_name || '';
+                document.getElementById('description').value = invoice.description || '';
+                
+                // Determine PDF URL
+                if (invoice.preview_path) {
+                    pdfUrl = `/view-pdf/${invoice.preview_path}?invoice_id=${invoiceId}`;
+                } else if (invoice.file_path) {
+                    pdfUrl = `/view-pdf/${invoice.file_path}?invoice_id=${invoiceId}`;
+                }
+                
+                if (pdfUrl) {
+                    loadPDF(pdfUrl);
+                } else {
+                    const errorDisplay = document.getElementById('errorDisplay');
+                    const errorMessage = document.getElementById('errorMessage');
+                    const loadingOverlay = document.getElementById('loadingOverlay');
+                    
+                    loadingOverlay.style.display = 'none';
+                    errorDisplay.style.display = 'flex';
+                    errorMessage.textContent = 'No PDF file available for this invoice.';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading invoice:', error);
+            const errorDisplay = document.getElementById('errorDisplay');
+            const errorMessage = document.getElementById('errorMessage');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            
+            loadingOverlay.style.display = 'none';
+            errorDisplay.style.display = 'flex';
+            errorMessage.textContent = 'Error loading invoice data. Please try again.';
+        });
+    
+    // Handle form submission
+    document.getElementById('invoiceForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            invoice_number: document.getElementById('invoiceNumber').value.trim(),
+            invoice_date: formatDateForSubmission(document.getElementById('invoiceDate').value),
+            amount: parseNumber(document.getElementById('totalAmount').value),
+            vat_amount: parseNumber(document.getElementById('vatAmount').value),
+            supplier_name: document.getElementById('vendorName').value.trim(),
+            company_name: document.getElementById('companyName').value.trim(),
+            description: document.getElementById('description').value.trim()
+        };
+        
+        fetch(`/api/update-pending/${invoiceId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Invoice updated successfully');
+                window.location.href = '/batch-upload';
+            } else {
+                alert('Error updating invoice: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error updating invoice:', error);
+            alert('Error updating invoice. Please try again.');
+        });
+    });
+});
+
+function formatNumber(num) {
+    if (num === null || num === undefined || isNaN(num)) return '';
+    return num.toString().replace('.', ',');
+}
+
+function parseNumber(str) {
+    if (!str) return 0;
+    return parseFloat(str.replace(',', '.')) || 0;
+}
+
+function formatDateForDisplay(dateStr) {
+    if (!dateStr) return '';
+    try {
+        // Check if already in DD.MM.YYYY format
+        if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(dateStr)) {
+            return dateStr;
+        }
+        
+        // Try to parse the date
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+            return date.getDate().toString().padStart(2, '0') + '.' +
+                   (date.getMonth() + 1).toString().padStart(2, '0') + '.' +
+                   date.getFullYear();
+        }
+        
+        // Try DD.MM.YYYY format
+        const parts = dateStr.split('.');
+        if (parts.length === 3) {
+            return dateStr;
+        }
+        
+        return '';
+    } catch (e) {
+        console.error('Error formatting date for display:', e);
+        return dateStr || '';
+    }
+}
+
+function formatDateForSubmission(dateStr) {
+    if (!dateStr) return '';
+    try {
+        // If it's in DD.MM.YYYY format, convert to YYYY-MM-DD
+        const parts = dateStr.split('.');
+        if (parts.length === 3) {
+            return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+        return dateStr;
+    } catch (e) {
+        console.error('Error formatting date for submission:', e);
+        return dateStr;
+    }
+}
+</script>
+{% endblock %} 

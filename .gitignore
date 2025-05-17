@@ -1,0 +1,75 @@
+# Python virtual environment
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+ENV/
+env/
+invoice_env/
+
+# Flask
+instance/
+.webassets-cache
+
+# Database files
+*.db
+*.db-journal
+*.db.backup
+*.db.old_backup
+*.db.old
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Log files
+*.log
+logs/
+npm-debug.log*
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Uploaded files and data (don't commit user data)
+uploads/
+organized_invoices/
+
+# Ollama models (large files)
+models/
+*.bin
+
+# Temporary files
+uploads/*.pdf
+uploads/*.PDF
+uploads/temp/
+uploads/preview/
+uploads/email_attachments/
+uploads/lexoffice/
+
+# Keys and credentials
+*.pem
+privatekey.pem 

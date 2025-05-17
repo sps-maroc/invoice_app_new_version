@@ -1,0 +1,428 @@
+{% extends "base.html" %}
+
+{% block title %}LexOffice Import{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4"><i class="bi bi-cloud-arrow-down-fill me-2"></i>LexOffice Import</h1>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">LexOffice API Connection</h5>
+                </div>
+                <div class="card-body">
+                    <div id="api-connection-form">
+                        <div class="mb-3">
+                            <label for="api-key" class="form-label">LexOffice API Key</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="api-key" placeholder="Enter your LexOffice API key">
+                                <button class="btn btn-outline-secondary" type="button" id="toggle-api-key">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                            <div class="form-text">
+                                You can obtain an API key from the LexOffice Developer Portal. 
+                                <a href="https://app.lexoffice.de/settings/#/public-api" target="_blank">Get your API key</a>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button id="test-connection-btn" class="btn btn-outline-primary">
+                                <i class="bi bi-link-45deg me-1"></i> Test Connection
+                            </button>
+                            <button id="save-credentials-btn" class="btn btn-primary">
+                                <i class="bi bi-save me-1"></i> Save Credentials
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="connection-status" class="mt-3 d-none">
+                        <!-- Connection status will be shown here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mb-4" id="sync-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Sync Invoice Data</h5>
+                    <span id="last-sync-badge" class="badge bg-secondary">Never synced</span>
+                </div>
+                <div class="card-body">
+                    <p>Sync invoices from your LexOffice account to process them in the invoice app.</p>
+                    
+                    <div class="d-flex gap-2 mb-3">
+                        <button id="sync-now-btn" class="btn btn-primary" disabled>
+                            <i class="bi bi-cloud-download me-1"></i> Sync Now
+                        </button>
+                        <button id="view-processed-btn" class="btn btn-outline-secondary">
+                            <i class="bi bi-list-check me-1"></i> View Processed Invoices
+                        </button>
+                    </div>
+                    
+                    <div id="sync-progress" class="d-none">
+                        <div class="progress mb-3">
+                            <div id="sync-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" 
+                                 style="width: 0%"></div>
+                        </div>
+                        <div id="sync-status-message">Preparing synchronization...</div>
+                    </div>
+                    
+                    <div id="sync-results" class="d-none">
+                        <h6>Sync Results</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="card text-center bg-light mb-3">
+                                    <div class="card-body">
+                                        <h3 id="total-vouchers">0</h3>
+                                        <p class="mb-0">Total Vouchers</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card text-center bg-light mb-3">
+                                    <div class="card-body">
+                                        <h3 id="downloaded-files">0</h3>
+                                        <p class="mb-0">Downloaded Files</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card text-center bg-light mb-3">
+                                    <div class="card-body">
+                                        <h3 id="processed-files">0</h3>
+                                        <p class="mb-0">Processed Files</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="sync-errors" class="d-none mt-3">
+                            <h6>Errors</h6>
+                            <div class="alert alert-danger">
+                                <ul id="error-list" class="mb-0"></ul>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <a href="/browser" class="btn btn-success">
+                                <i class="bi bi-folder2-open me-1"></i> Go to Invoice Browser
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card" id="recent-syncs-card">
+                <div class="card-header">
+                    <h5 class="mb-0">Recent Synchronizations</h5>
+                </div>
+                <div class="card-body">
+                    <div id="recent-syncs-loading">
+                        <div class="d-flex justify-content-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="recent-syncs-content" class="d-none">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Batch ID</th>
+                                        <th>Documents</th>
+                                        <th>Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-syncs-table">
+                                    <!-- Recent syncs will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="no-syncs" class="text-center py-3 d-none">
+                            <p class="text-muted mb-0">No synchronization history found</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize state
+        let hasCredentials = false;
+        let isSyncing = false;
+        
+        // Element references
+        const apiKeyInput = document.getElementById('api-key');
+        const toggleApiKeyBtn = document.getElementById('toggle-api-key');
+        const testConnectionBtn = document.getElementById('test-connection-btn');
+        const saveCredentialsBtn = document.getElementById('save-credentials-btn');
+        const connectionStatus = document.getElementById('connection-status');
+        const syncNowBtn = document.getElementById('sync-now-btn');
+        const viewProcessedBtn = document.getElementById('view-processed-btn');
+        const syncProgress = document.getElementById('sync-progress');
+        const syncProgressBar = document.getElementById('sync-progress-bar');
+        const syncStatusMessage = document.getElementById('sync-status-message');
+        const syncResults = document.getElementById('sync-results');
+        const totalVouchersEl = document.getElementById('total-vouchers');
+        const downloadedFilesEl = document.getElementById('downloaded-files');
+        const processedFilesEl = document.getElementById('processed-files');
+        const syncErrors = document.getElementById('sync-errors');
+        const errorList = document.getElementById('error-list');
+        const lastSyncBadge = document.getElementById('last-sync-badge');
+        const recentSyncsLoading = document.getElementById('recent-syncs-loading');
+        const recentSyncsContent = document.getElementById('recent-syncs-content');
+        const recentSyncsTable = document.getElementById('recent-syncs-table');
+        const noSyncs = document.getElementById('no-syncs');
+        
+        // Toggle API key visibility
+        toggleApiKeyBtn.addEventListener('click', () => {
+            if (apiKeyInput.type === 'password') {
+                apiKeyInput.type = 'text';
+                toggleApiKeyBtn.innerHTML = '<i class="bi bi-eye-slash"></i>';
+            } else {
+                apiKeyInput.type = 'password';
+                toggleApiKeyBtn.innerHTML = '<i class="bi bi-eye"></i>';
+            }
+        });
+        
+        // Test connection
+        testConnectionBtn.addEventListener('click', async () => {
+            const apiKey = apiKeyInput.value.trim();
+            
+            if (!apiKey) {
+                showConnectionStatus('error', 'Please enter an API key');
+                return;
+            }
+            
+            showConnectionStatus('loading', 'Testing connection...');
+            
+            try {
+                const response = await axios.post('/api/lexoffice/test-connection', { api_key: apiKey });
+                
+                if (response.data.success) {
+                    showConnectionStatus('success', 'Connection successful! Your API key works.');
+                } else {
+                    showConnectionStatus('error', response.data.error || 'Connection failed');
+                }
+            } catch (error) {
+                showConnectionStatus('error', getErrorMessage(error));
+            }
+        });
+        
+        // Save credentials
+        saveCredentialsBtn.addEventListener('click', async () => {
+            const apiKey = apiKeyInput.value.trim();
+            
+            if (!apiKey) {
+                showConnectionStatus('error', 'Please enter an API key');
+                return;
+            }
+            
+            showConnectionStatus('loading', 'Saving credentials...');
+            
+            try {
+                const response = await axios.post('/api/lexoffice/save-credentials', { api_key: apiKey });
+                
+                if (response.data.success) {
+                    showConnectionStatus('success', 'Credentials saved successfully!');
+                    hasCredentials = true;
+                    syncNowBtn.disabled = false;
+                    
+                    // Refresh sync status
+                    loadSyncStatus();
+                } else {
+                    showConnectionStatus('error', response.data.error || 'Failed to save credentials');
+                }
+            } catch (error) {
+                showConnectionStatus('error', getErrorMessage(error));
+            }
+        });
+        
+        // Sync now
+        syncNowBtn.addEventListener('click', async () => {
+            if (isSyncing) return;
+            
+            isSyncing = true;
+            syncNowBtn.disabled = true;
+            syncResults.classList.add('d-none');
+            syncProgress.classList.remove('d-none');
+            syncProgressBar.style.width = '10%';
+            syncStatusMessage.textContent = 'Connecting to LexOffice API...';
+            
+            try {
+                syncProgressBar.style.width = '25%';
+                syncStatusMessage.textContent = 'Fetching invoice data...';
+                
+                const response = await axios.post('/api/lexoffice/sync');
+                
+                if (response.data.success) {
+                    syncProgressBar.style.width = '100%';
+                    syncStatusMessage.textContent = 'Synchronization complete!';
+                    
+                    // Show results
+                    totalVouchersEl.textContent = response.data.total_vouchers;
+                    downloadedFilesEl.textContent = response.data.downloaded_files;
+                    processedFilesEl.textContent = response.data.processed_files;
+                    
+                    // Show errors if any
+                    if (response.data.errors && response.data.errors.length > 0) {
+                        errorList.innerHTML = '';
+                        for (const error of response.data.errors) {
+                            const li = document.createElement('li');
+                            li.textContent = error;
+                            errorList.appendChild(li);
+                        }
+                        syncErrors.classList.remove('d-none');
+                    } else {
+                        syncErrors.classList.add('d-none');
+                    }
+                    
+                    syncResults.classList.remove('d-none');
+                    
+                    // Refresh sync status
+                    loadSyncStatus();
+                } else {
+                    syncStatusMessage.textContent = 'Synchronization failed: ' + (response.data.error || 'Unknown error');
+                    syncProgressBar.classList.add('bg-danger');
+                }
+            } catch (error) {
+                syncStatusMessage.textContent = 'Synchronization failed: ' + getErrorMessage(error);
+                syncProgressBar.classList.add('bg-danger');
+            } finally {
+                isSyncing = false;
+                syncNowBtn.disabled = false;
+            }
+        });
+        
+        // View processed invoices button
+        viewProcessedBtn.addEventListener('click', () => {
+            window.location.href = '/browser';
+        });
+        
+        // Helper functions
+        function showConnectionStatus(type, message) {
+            connectionStatus.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-info');
+            
+            if (type === 'success') {
+                connectionStatus.classList.add('alert', 'alert-success');
+                connectionStatus.innerHTML = `<i class="bi bi-check-circle me-2"></i>${message}`;
+            } else if (type === 'error') {
+                connectionStatus.classList.add('alert', 'alert-danger');
+                connectionStatus.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${message}`;
+            } else if (type === 'loading') {
+                connectionStatus.classList.add('alert', 'alert-info');
+                connectionStatus.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        ${message}
+                    </div>
+                `;
+            }
+        }
+        
+        function getErrorMessage(error) {
+            if (error.response && error.response.data) {
+                return error.response.data.error || error.message;
+            }
+            return error.message;
+        }
+        
+        function formatDate(dateString) {
+            if (!dateString) return 'Never';
+            
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+        
+        function truncateUuid(uuid) {
+            if (!uuid) return '';
+            return uuid.split('-')[0] + '...';
+        }
+        
+        // Load credentials and sync status
+        async function loadCredentials() {
+            try {
+                const response = await axios.get('/api/lexoffice/credentials');
+                
+                if (response.data.success && response.data.has_credentials) {
+                    hasCredentials = true;
+                    syncNowBtn.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error loading credentials:', error);
+            }
+        }
+        
+        async function loadSyncStatus() {
+            try {
+                const response = await axios.get('/api/lexoffice/sync-status');
+                
+                if (response.data.success) {
+                    // Update last sync badge
+                    if (response.data.last_sync) {
+                        lastSyncBadge.textContent = 'Last sync: ' + formatDate(response.data.last_sync);
+                        lastSyncBadge.classList.remove('bg-secondary');
+                        lastSyncBadge.classList.add('bg-success');
+                    } else {
+                        lastSyncBadge.textContent = 'Never synced';
+                    }
+                    
+                    // Update recent syncs table
+                    recentSyncsLoading.classList.add('d-none');
+                    
+                    if (response.data.recent_batches && response.data.recent_batches.length > 0) {
+                        recentSyncsTable.innerHTML = '';
+                        
+                        for (const batch of response.data.recent_batches) {
+                            const row = document.createElement('tr');
+                            
+                            row.innerHTML = `
+                                <td><small class="text-muted">${truncateUuid(batch.batch_id)}</small></td>
+                                <td>${batch.count}</td>
+                                <td>${formatDate(batch.last_processed)}</td>
+                                <td>
+                                    <a href="/browser?batch=${batch.batch_id}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                </td>
+                            `;
+                            
+                            recentSyncsTable.appendChild(row);
+                        }
+                        
+                        noSyncs.classList.add('d-none');
+                    } else {
+                        noSyncs.classList.remove('d-none');
+                    }
+                    
+                    recentSyncsContent.classList.remove('d-none');
+                }
+            } catch (error) {
+                console.error('Error loading sync status:', error);
+                recentSyncsLoading.classList.add('d-none');
+                recentSyncsContent.classList.add('d-none');
+                
+                // Show error message
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger';
+                errorDiv.textContent = 'Failed to load sync status: ' + getErrorMessage(error);
+                document.getElementById('recent-syncs-card').querySelector('.card-body').appendChild(errorDiv);
+            }
+        }
+        
+        // Initialize the page
+        loadCredentials();
+        loadSyncStatus();
+    });
+</script>
+{% endblock %} 

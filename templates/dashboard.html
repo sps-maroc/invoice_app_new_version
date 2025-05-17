@@ -1,0 +1,885 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Enterprise Invoice Management{% endblock %}
+
+{% block head %}
+<style>
+    .stat-card {
+        border-radius: 10px;
+        color: white;
+        padding: 20px;
+        position: relative;
+        overflow: hidden;
+        min-height: 150px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    
+    .stat-card-icon {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        font-size: 4rem;
+        opacity: 0.3;
+    }
+    
+    .stat-card-value {
+        font-size: 3rem;
+        font-weight: 700;
+    }
+    
+    .stat-card-link {
+        color: rgba(255, 255, 255, 0.7);
+        text-decoration: none;
+    }
+    
+    .stat-card-link:hover {
+        color: white;
+    }
+    
+    .card-blue {
+        background: linear-gradient(135deg, #0d6efd, #0a58ca);
+    }
+    
+    .card-green {
+        background: linear-gradient(135deg, #198754, #157347);
+    }
+    
+    .card-cyan {
+        background: linear-gradient(135deg, #0dcaf0, #0aa3c2);
+    }
+    
+    .card-orange {
+        background: linear-gradient(135deg, #fd7e14, #cc6611);
+    }
+    
+    .chart-container {
+        height: 300px;
+        position: relative;
+    }
+    
+    .recent-activity-item {
+        border-bottom: 1px solid #eee;
+        padding: 12px 0;
+    }
+    
+    .recent-activity-item:last-child {
+        border-bottom: none;
+    }
+    
+    .upload-buttons {
+        margin-bottom: 20px;
+        display: flex;
+        gap: 10px;
+    }
+    
+    /* New styles for system status and finance overview */
+    .cursor-pointer {
+        cursor: pointer;
+    }
+    
+    .system-status-card {
+        transition: all 0.3s ease;
+    }
+    
+    .system-status-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .progress {
+        overflow: visible;
+    }
+    
+    .progress-bar {
+        position: relative;
+        border-radius: 4px;
+        transition: width 1s ease;
+    }
+    
+    /* Animated status indicators */
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+    
+    .status-pulse {
+        animation: pulse 2s infinite;
+    }
+    
+    /* Top suppliers list styling */
+    .supplier-list-item {
+        padding: 8px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .supplier-list-item:last-child {
+        border-bottom: none;
+    }
+    
+    /* Finance stats styling */
+    .finance-highlight {
+        color: #198754;
+        font-weight: 600;
+    }
+    
+    /* System load indicator */
+    .load-indicator {
+        height: 30px;
+        display: flex;
+        align-items: center;
+        padding: 0 15px;
+        border-radius: 15px;
+        color: white;
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Dashboard</h2>
+        </div>
+        <div class="col-auto">
+            <div class="btn-group">
+                <a href="{{ url_for('file_management_page') }}" class="btn btn-primary">
+                    <i class="fas fa-file-alt"></i> File Management
+                </a>
+                <a href="{{ url_for('upload_page') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-upload"></i> Upload
+                </a>
+                <a href="{{ url_for('batch_upload_page') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-file-upload"></i> Batch Upload
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Quick Stats -->
+        <div class="col-md-3 mb-4">
+            <div class="stat-card card-blue">
+                <span class="stat-card-icon">
+                    <i class="fas fa-file-invoice"></i>
+                </span>
+                <span>Pending Invoices</span>
+                <span class="stat-card-value" id="pendingCount">...</span>
+                <a href="{{ url_for('browser_page') }}?status=pending" class="stat-card-link">View all <i class="fas fa-arrow-right"></i></a>
+            </div>
+        </div>
+        <div class="col-md-3 mb-4">
+            <div class="stat-card card-green">
+                <span class="stat-card-icon">
+                    <i class="fas fa-check-circle"></i>
+                </span>
+                <span>Processed Today</span>
+                <span class="stat-card-value" id="processedToday">...</span>
+                <a href="{{ url_for('browser_page') }}?date=today&status=processed" class="stat-card-link">View all <i class="fas fa-arrow-right"></i></a>
+            </div>
+        </div>
+        <div class="col-md-3 mb-4">
+            <div class="stat-card card-orange">
+                <span class="stat-card-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </span>
+                <span>Manual Input Needed</span>
+                <span class="stat-card-value" id="manualInputCount">...</span>
+                <a href="{{ url_for('browser_page') }}?needs_manual=true" class="stat-card-link">Take action <i class="fas fa-arrow-right"></i></a>
+            </div>
+        </div>
+        <div class="col-md-3 mb-4">
+            <div class="stat-card card-cyan">
+                <span class="stat-card-icon">
+                    <i class="fas fa-database"></i>
+                </span>
+                <span>Total Files</span>
+                <span class="stat-card-value" id="totalFiles">...</span>
+                <a href="{{ url_for('browser_page') }}" class="stat-card-link">Browse all <i class="fas fa-arrow-right"></i></a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Amount Row -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-4">
+            <div class="stat-card" style="background: linear-gradient(135deg, #6f42c1, #5e37a6);">
+                <span class="stat-card-icon">
+                    <i class="fas fa-euro-sign"></i>
+                </span>
+                <span>Total Amount Across All Invoices</span>
+                <span class="stat-card-value" id="totalAmount">...</span>
+                <a href="{{ url_for('browser_page') }}" class="stat-card-link">View breakdown <i class="fas fa-arrow-right"></i></a>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-4">
+            <div class="stat-card" style="background: linear-gradient(135deg, #20c997, #13795b);">
+                <span class="stat-card-icon">
+                    <i class="fas fa-chart-line"></i>
+                </span>
+                <span>Average Invoice Amount</span>
+                <span class="stat-card-value" id="averageAmount">...</span>
+                <span class="text-white-50 small">Based on <span id="invoiceCount">0</span> invoices</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invoice Statistics Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Invoice Statistics</h5>
+                    <button id="refreshStats" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card mb-3">
+                                <div class="card-body text-center">
+                                    <h6 class="card-subtitle mb-2 text-muted">Processed Invoices</h6>
+                                    <h2 id="processedCount" class="mb-0">...</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card mb-3">
+                                <div class="card-body text-center">
+                                    <h6 class="card-subtitle mb-2 text-muted">This Month</h6>
+                                    <h2 id="thisMonthCount" class="mb-0">...</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card mb-3">
+                                <div class="card-body text-center">
+                                    <h6 class="card-subtitle mb-2 text-muted">Success Rate</h6>
+                                    <h2 id="successRate" class="mb-0">...</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-subtitle mb-3 text-muted">Invoice Amounts Distribution</h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <tbody>
+                                                <tr>
+                                                    <td>Invoices < €100</td>
+                                                    <td id="amount-small" class="text-end">...</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Invoices €100 - €1,000</td>
+                                                    <td id="amount-medium" class="text-end">...</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Invoices > €1,000</td>
+                                                    <td id="amount-large" class="text-end">...</td>
+                                                </tr>
+                                                <tr class="table-active">
+                                                    <td><strong>Highest Invoice</strong></td>
+                                                    <td id="amount-highest" class="text-end"><strong>...</strong></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-subtitle mb-3 text-muted">Processing Times</h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <tbody>
+                                                <tr>
+                                                    <td>Average Processing Time</td>
+                                                    <td id="avg-process-time" class="text-end">...</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Invoices Pending > 7 Days</td>
+                                                    <td id="pending-overdue" class="text-end">...</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Oldest Unprocessed Invoice</td>
+                                                    <td id="oldest-pending" class="text-end">...</td>
+                                                </tr>
+                                                <tr class="table-active">
+                                                    <td><strong>Efficiency Rating</strong></td>
+                                                    <td id="efficiency-rating" class="text-end"><strong>...</strong></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Monthly Revenue Chart -->
+        <div class="col-md-8 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Monthly Revenue Trends</h5>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="updateRevenueChart('6months')">6 Months</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary active" onclick="updateRevenueChart('12months')">12 Months</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Invoice Status Distribution -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Invoice Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Recent Activity -->
+        <div class="col-md-8 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Recent Activity</h5>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="refreshActivity">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Invoice</th>
+                                    <th>Supplier</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentActivityTable">
+                                <tr>
+                                    <td colspan="6" class="text-center">Loading recent activity...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Suppliers and System Status -->
+        <div class="col-md-4">
+            <!-- Top Suppliers -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Top Suppliers</h5>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush" id="topSuppliersList">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Loading suppliers...</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- System Status -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">System Status</h5>
+                </div>
+                <div class="card-body">
+                    <div id="systemStatusContainer">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>Database</span>
+                            <span class="badge bg-secondary">Checking...</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>AI Processing</span>
+                            <span class="badge bg-secondary">Checking...</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>Storage</span>
+                            <span class="badge bg-secondary">Checking...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Dashboard charts and data
+    let revenueChart, statusChart;
+    let dashboardData = {};
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Fetch dashboard data
+        fetchDashboardData();
+        
+        // Refresh activity button
+        document.getElementById('refreshActivity').addEventListener('click', function() {
+            fetchDashboardData();
+        });
+        
+        // Refresh stats button
+        if (document.getElementById('refreshStats')) {
+            document.getElementById('refreshStats').addEventListener('click', function() {
+                fetchDashboardData();
+            });
+        }
+        
+        // Set up polling for automatic refresh (every 5 minutes)
+        setInterval(fetchDashboardData, 300000);
+    });
+    
+    // Fetch dashboard statistics and update UI
+    function fetchDashboardData() {
+        fetch('/api/dashboard-stats')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to fetch dashboard stats');
+                }
+                
+                // Extract stats from the response
+                const stats = data.stats || {};
+                
+                // Store data for other functions to use
+                dashboardData = stats;
+                
+                // Update UI elements
+                updateDashboardStats(stats);
+                updateRevenueChart('12months');
+                updateStatusChart();
+                updateRecentActivity();
+                updateTopSuppliers(stats.top_suppliers || []);
+                updateSystemStatus();
+            })
+            .catch(error => {
+                console.error('Error fetching dashboard data:', error);
+                // Show user-friendly error message
+                showToast(`Error loading dashboard data: ${error.message}`, 'error');
+            });
+    }
+    
+    // Update dashboard statistics
+    function updateDashboardStats(stats) {
+        document.getElementById('pendingCount').textContent = stats.total_pending || 0;
+        document.getElementById('processedToday').textContent = stats.recent_uploads || 0;
+        document.getElementById('manualInputCount').textContent = stats.needs_manual_input || 0;
+        document.getElementById('totalFiles').textContent = (stats.total_invoices || 0);
+        
+        // Format currency values using the utility function from main.js
+        const totalAmount = stats.total_amount || 0;
+        const averageAmount = stats.average_amount || 0;
+        
+        document.getElementById('totalAmount').textContent = formatCurrency(totalAmount);
+        document.getElementById('averageAmount').textContent = formatCurrency(averageAmount);
+        document.getElementById('invoiceCount').textContent = stats.total_invoices || 0;
+        
+        // Update invoice statistics section
+        document.getElementById('processedCount').textContent = stats.total_invoices || 0;
+        document.getElementById('thisMonthCount').textContent = stats.this_month_count || 0;
+        document.getElementById('successRate').textContent = stats.success_rate ? `${stats.success_rate}%` : 'N/A';
+        
+        // Update amount distribution
+        document.getElementById('amount-small').textContent = stats.small_invoices || 0;
+        document.getElementById('amount-medium').textContent = stats.medium_invoices || 0;
+        document.getElementById('amount-large').textContent = stats.large_invoices || 0;
+        document.getElementById('amount-highest').textContent = formatCurrency(stats.highest_amount || 0);
+        
+        // Update processing times
+        document.getElementById('avg-process-time').textContent = stats.avg_process_time || 'N/A';
+        document.getElementById('pending-overdue').textContent = stats.overdue_invoices || 0;
+        document.getElementById('oldest-pending').textContent = stats.oldest_pending || 'N/A';
+        document.getElementById('efficiency-rating').textContent = stats.efficiency || 'N/A';
+    }
+    
+    // Initialize and update revenue chart
+    function updateRevenueChart(timeFrame) {
+        // Set active button
+        document.querySelectorAll('.btn-group .btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`.btn-group .btn[onclick*="${timeFrame}"]`).classList.add('active');
+        
+        // Prepare data
+        let monthlyData = dashboardData.monthly_amounts || [];
+        let months = [];
+        let amounts = [];
+        let counts = [];
+        
+        // Sort data by month (ascending)
+        monthlyData.sort((a, b) => a.month.localeCompare(b.month));
+        
+        // Get last 6 or 12 months data
+        let limit = timeFrame === '6months' ? 6 : 12;
+        let displayData = monthlyData.slice(-limit);
+        
+        displayData.forEach(item => {
+            // Format month label (YYYY-MM to MMM YYYY)
+            let [year, month] = item.month.split('-');
+            let date = new Date(year, month - 1);
+            let monthLabel = date.toLocaleDateString('de-DE', { month: 'short', year: 'numeric' });
+            
+            months.push(monthLabel);
+            amounts.push(item.total || 0);
+            counts.push(item.count || 0);
+        });
+        
+        // Initialize or update chart
+        const ctx = document.getElementById('revenueChart').getContext('2d');
+        
+        if (revenueChart) {
+            revenueChart.data.labels = months;
+            revenueChart.data.datasets[0].data = amounts;
+            revenueChart.data.datasets[1].data = counts;
+            revenueChart.update();
+        } else {
+            revenueChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: months,
+                    datasets: [
+                        {
+                            label: 'Total Amount (€)',
+                            data: amounts,
+                            backgroundColor: 'rgba(13, 110, 253, 0.5)',
+                            borderColor: 'rgba(13, 110, 253, 1)',
+                            borderWidth: 1,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Invoice Count',
+                            data: counts,
+                            type: 'line',
+                            backgroundColor: 'rgba(25, 135, 84, 0.2)',
+                            borderColor: 'rgba(25, 135, 84, 1)',
+                            borderWidth: 2,
+                            pointRadius: 4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            type: 'linear',
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Amount (€)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+                                }
+                            }
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            type: 'linear',
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Invoice Count'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.dataset.yAxisID === 'y') {
+                                        return label + context.raw.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+                                    } else {
+                                        return label + context.raw;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    // Initialize and update status chart
+    function updateStatusChart() {
+        const ctx = document.getElementById('statusChart').getContext('2d');
+        
+        // Prepare data
+        const data = [
+            dashboardData.total_pending || 0,
+            dashboardData.needs_manual_input || 0,
+            dashboardData.total_processed || 0
+        ];
+        
+        if (statusChart) {
+            statusChart.data.datasets[0].data = data;
+            statusChart.update();
+        } else {
+            statusChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Pending', 'Needs Input', 'Processed'],
+                    datasets: [{
+                        data: data,
+                        backgroundColor: [
+                            'rgba(13, 110, 253, 0.7)',
+                            'rgba(253, 126, 20, 0.7)',
+                            'rgba(25, 135, 84, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(13, 110, 253, 1)',
+                            'rgba(253, 126, 20, 1)',
+                            'rgba(25, 135, 84, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    let value = context.raw || 0;
+                                    let total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    let percentage = Math.round((value / total) * 100);
+                                    return `${label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    // Update recent activity table
+    function updateRecentActivity() {
+        fetch('/api/pending-invoices?limit=10&sort=created_at&order=desc')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load recent activity');
+                }
+                
+                const tableBody = document.getElementById('recentActivityTable');
+                tableBody.innerHTML = '';
+                
+                const invoices = data.pending_invoices || [];
+                
+                if (!invoices.length) {
+                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center">No recent activity</td></tr>';
+                    return;
+                }
+                
+                invoices.forEach(invoice => {
+                    let statusBadge;
+                    if (invoice.is_finalized) {
+                        statusBadge = '<span class="badge bg-success">Processed</span>';
+                    } else if (invoice.needs_manual_input) {
+                        statusBadge = '<span class="badge bg-warning">Needs Input</span>';
+                    } else {
+                        statusBadge = '<span class="badge bg-primary">Pending</span>';
+                    }
+                    
+                    let invoiceDate = invoice.created_at ? new Date(invoice.created_at).toLocaleDateString('de-DE') : 'N/A';
+                    let amount = invoice.amount ? formatCurrency(invoice.amount) : 'N/A';
+                    
+                    let row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${invoice.invoice_number || 'Unknown'}</td>
+                        <td>${invoice.supplier_name || 'Unknown'}</td>
+                        <td>${amount}</td>
+                        <td>${statusBadge}</td>
+                        <td>${invoiceDate}</td>
+                        <td>
+                            <div class="btn-group">
+                                <button onclick="location.href='/api/pending/${invoice.id}'" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                                <button onclick="previewFile('${encodeURIComponent(invoice.file_path)}')" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching recent activity:', error);
+                document.getElementById('recentActivityTable').innerHTML = 
+                    '<tr><td colspan="6" class="text-center text-danger">Error loading recent activity: ' + error.message + '</td></tr>';
+            });
+    }
+    
+    // Helper function to preview files
+    function previewFile(filePath) {
+        if (!filePath) return;
+        
+        const viewerUrl = `/view-pdf/${filePath}`;
+        window.open(viewerUrl, '_blank');
+    }
+    
+    // Update top suppliers list
+    function updateTopSuppliers(suppliers) {
+        const suppliersList = document.getElementById('topSuppliersList');
+        suppliersList.innerHTML = '';
+        
+        if (!suppliers || !suppliers.length) {
+            suppliersList.innerHTML = `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>No supplier data available</span>
+                </li>
+            `;
+            return;
+        }
+        
+        suppliers.forEach(supplier => {
+            let item = document.createElement('li');
+            item.className = 'list-group-item d-flex justify-content-between align-items-center';
+            item.innerHTML = `
+                <span>${supplier.name || 'Unknown'}</span>
+                <span class="badge bg-primary rounded-pill">${supplier.count || 0}</span>
+            `;
+            suppliersList.appendChild(item);
+        });
+    }
+    
+    // Update system status
+    function updateSystemStatus() {
+        fetch('/api/system-status')
+            .then(response => response.json())
+            .then(data => {
+                const statusContainer = document.getElementById('systemStatusContainer');
+                statusContainer.innerHTML = '';
+                
+                // Helper function to get badge class based on status
+                function getBadgeClass(status) {
+                    switch(status) {
+                        case 'ok': return 'bg-success';
+                        case 'warning': return 'bg-warning';
+                        case 'error': return 'bg-danger';
+                        default: return 'bg-secondary';
+                    }
+                }
+                
+                // Database status
+                const dbStatus = document.createElement('div');
+                dbStatus.className = 'd-flex justify-content-between align-items-center mb-2';
+                dbStatus.innerHTML = `
+                    <span>Database</span>
+                    <span class="badge ${getBadgeClass(data.database.status)}" 
+                          data-bs-toggle="tooltip" 
+                          title="${data.database.details}">
+                        ${data.database.message}
+                    </span>
+                `;
+                statusContainer.appendChild(dbStatus);
+                
+                // AI Processing status
+                const aiStatus = document.createElement('div');
+                aiStatus.className = 'd-flex justify-content-between align-items-center mb-2';
+                aiStatus.innerHTML = `
+                    <span>AI Processing</span>
+                    <span class="badge ${getBadgeClass(data.ai_processing.status)}"
+                          data-bs-toggle="tooltip" 
+                          title="${data.ai_processing.details}">
+                        ${data.ai_processing.message}
+                    </span>
+                `;
+                statusContainer.appendChild(aiStatus);
+                
+                // File Storage status
+                const storageStatus = document.createElement('div');
+                storageStatus.className = 'd-flex justify-content-between align-items-center mb-2';
+                storageStatus.innerHTML = `
+                    <span>Storage</span>
+                    <span class="badge ${getBadgeClass(data.file_storage.status)}"
+                          data-bs-toggle="tooltip" 
+                          title="${data.file_storage.details}">
+                        ${data.file_storage.message}
+                    </span>
+                `;
+                statusContainer.appendChild(storageStatus);
+                
+                // Last updated
+                const lastUpdate = document.createElement('div');
+                lastUpdate.className = 'text-muted mt-3 small text-end';
+                lastUpdate.innerHTML = `Last updated: ${new Date(data.timestamp).toLocaleTimeString()}`;
+                statusContainer.appendChild(lastUpdate);
+                
+                // Initialize tooltips
+                if (typeof bootstrap !== 'undefined') {
+                    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+                    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching system status:', error);
+                document.getElementById('systemStatusContainer').innerHTML = 
+                    '<div class="alert alert-danger">Error loading system status</div>';
+            });
+    }
+</script>
+{% endblock %}

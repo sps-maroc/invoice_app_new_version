@@ -1,0 +1,494 @@
+{% extends "base.html" %}
+
+{% block title %}Validate Invoice{% endblock %}
+
+{% block content %}
+<!-- Add a conditional section at the top of the page for sequential mode -->
+{% if request.args.get('sequential') %}
+<div class="alert alert-info mb-4">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <strong><i class="bi bi-info-circle"></i> Sequential Processing Mode</strong> - 
+            You're reviewing files one by one. After validating this invoice, click "Continue to Next File" to process the next one.
+        </div>
+        <a href="/sequential-validate/{{ request.args.get('batch_id') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-list-ul"></i> Return to Batch Overview
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Document Preview</h5>
+                    <div>
+                        <button id="zoom-in-btn" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-zoom-in"></i> Zoom In
+                        </button>
+                        <button id="zoom-out-btn" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-zoom-out"></i> Zoom Out
+                        </button>
+                        <button id="rotate-btn" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-arrow-clockwise"></i> Rotate
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div id="pdf-container" class="d-flex justify-content-center" style="min-height: 600px; overflow: auto; background: #f0f0f0;">
+                        <!-- PDF will be embedded here -->
+                        {% if pdf_url %}
+                        <iframe id="pdf-viewer" src="{{ pdf_url }}" width="100%" height="800px" style="border: none;"></iframe>
+                        {% else %}
+                        <div class="alert alert-warning m-3 w-100 text-center">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            No PDF preview available for this invoice.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Invoice Data</h5>
+                </div>
+                <div class="card-body">
+                    <form id="invoice-form">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="invoice-number" class="form-label">Invoice Number</label>
+                                <input type="text" class="form-control" id="invoice-number" name="invoice_number" value="{{ invoice.invoice_number or invoice.Rechnungsnummer or '' }}">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="invoice-date" class="form-label">Invoice Date</label>
+                                <input type="date" class="form-control" id="invoice-date" name="invoice_date" value="{{ invoice.invoice_date or invoice.Rechnungsdatum or '' }}">
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="due-date" class="form-label">Due Date</label>
+                                <input type="date" class="form-control" id="due-date" name="due_date" value="{{ invoice.due_date or '' }}">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="amount" class="form-label">Amount</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">€</span>
+                                    <input type="text" class="form-control" id="amount" name="amount" value="{{ invoice.amount or invoice.Gesamtbetrag or invoice.total_amount or '' }}">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="vat-amount" class="form-label">VAT Amount</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">€</span>
+                                    <input type="text" class="form-control" id="vat-amount" name="vat_amount" value="{{ invoice.vat_amount or invoice.Mehrwertsteuerbetrag or invoice.tax_amount or '' }}">
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="supplier-name" class="form-label">Supplier Name</label>
+                                <input type="text" class="form-control" id="supplier-name" name="supplier_name" value="{{ invoice.supplier_name or invoice.Lieferantename or invoice.vendor_name or '' }}">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="company-name" class="form-label">Company Name</label>
+                            <input type="text" class="form-control" id="company-name" name="company_name" value="{{ invoice.company_name or invoice.Empfängerfirma or '' }}">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3">{{ invoice.description or invoice.Leistungsbeschreibung or '' }}</textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="validation-notes" class="form-label">Validation Notes</label>
+                            <textarea class="form-control" id="validation-notes" name="validation_notes" rows="2" placeholder="Add notes about this invoice...">{{ invoice.validation_notes or '' }}</textarea>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <button type="button" id="cancel-btn" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </button>
+                            <div>
+                                <button type="button" id="save-btn" class="btn btn-primary">
+                                    <i class="bi bi-save"></i> Save Changes
+                                </button>
+                                <button type="button" id="finalize-btn" class="btn btn-success ms-2">
+                                    <i class="bi bi-check-circle"></i> Validate & Finalize
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">File Information</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th>Source</th>
+                                <td>{{ invoice.source or 'Manual Upload' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Processed Date</th>
+                                <td>{{ invoice.created_at|default('Unknown', true) }}</td>
+                            </tr>
+                            <tr>
+                                <th>Status</th>
+                                <td>
+                                    {% if invoice.is_finalized %}
+                                    <span class="badge bg-success">Finalized</span>
+                                    {% elif invoice.needs_manual_input %}
+                                    <span class="badge bg-warning">Needs Review</span>
+                                    {% else %}
+                                    <span class="badge bg-primary">Pending</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>File Path</th>
+                                <td class="text-truncate" style="max-width: 300px;" title="{{ invoice.file_path }}">
+                                    {{ invoice.file_path }}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>AI Model</th>
+                                <td>{{ invoice.model_used or 'Unknown' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add a sequential mode action button at the bottom of the form -->
+{% if request.args.get('sequential') %}
+<div class="card mt-4 mb-4">
+    <div class="card-body d-flex justify-content-between">
+        <div>
+            <button type="button" id="sequential-save-continue" class="btn btn-success">
+                <i class="bi bi-check-circle"></i> Save & Continue to Next File
+            </button>
+            <button type="button" id="sequential-skip" class="btn btn-outline-secondary ms-2">
+                <i class="bi bi-skip-forward"></i> Skip This File
+            </button>
+        </div>
+        <a href="/sequential-validate/{{ request.args.get('batch_id') }}" class="btn btn-outline-primary">
+            <i class="bi bi-list-ul"></i> Batch Overview
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // PDF Viewer Controls
+        const zoomInBtn = document.getElementById('zoom-in-btn');
+        const zoomOutBtn = document.getElementById('zoom-out-btn');
+        const rotateBtn = document.getElementById('rotate-btn');
+        const pdfViewer = document.getElementById('pdf-viewer');
+        
+        let currentZoom = 100;
+        let currentRotation = 0;
+        
+        if (zoomInBtn && pdfViewer) {
+            zoomInBtn.addEventListener('click', function() {
+                currentZoom += 10;
+                pdfViewer.style.width = `${currentZoom}%`;
+            });
+        }
+        
+        if (zoomOutBtn && pdfViewer) {
+            zoomOutBtn.addEventListener('click', function() {
+                if (currentZoom > 50) {
+                    currentZoom -= 10;
+                    pdfViewer.style.width = `${currentZoom}%`;
+                }
+            });
+        }
+        
+        if (rotateBtn && pdfViewer) {
+            rotateBtn.addEventListener('click', function() {
+                currentRotation += 90;
+                if (currentRotation >= 360) {
+                    currentRotation = 0;
+                }
+                pdfViewer.style.transform = `rotate(${currentRotation}deg)`;
+            });
+        }
+        
+        // Finalize button
+        const finalizeBtn = document.getElementById('finalize-btn');
+        const saveBtn = document.getElementById('save-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+        const invoiceForm = document.getElementById('invoice-form');
+        
+        // Format date fields to prevent issues
+        const dateFields = document.querySelectorAll('input[type="date"]');
+        dateFields.forEach(field => {
+            if (field.value) {
+                try {
+                    // Attempt to parse the date value
+                    const dateValue = field.value;
+                    // Try to parse as ISO date (YYYY-MM-DD)
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                        // Try to convert from German/European format (DD.MM.YYYY)
+                        if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateValue)) {
+                            const parts = dateValue.split('.');
+                            field.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                        } else {
+                            // Try as a date object
+                            const date = new Date(dateValue);
+                            if (!isNaN(date.getTime())) {
+                                field.value = date.toISOString().split('T')[0];
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error formatting date:', e);
+                }
+            }
+        });
+        
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function() {
+                // Get form data
+                const formData = new FormData(invoiceForm);
+                const jsonData = {};
+                
+                formData.forEach((value, key) => {
+                    jsonData[key] = value;
+                });
+                
+                // Add is_validated flag
+                jsonData.is_validated = 0;
+                
+                // Save to API
+                fetch('/api/update-pending/{{ invoice_id }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(jsonData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Changes saved successfully');
+                    } else {
+                        alert('Error saving changes: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error saving changes: ' + error);
+                });
+            });
+        }
+        
+        if (finalizeBtn) {
+            finalizeBtn.addEventListener('click', function() {
+                // Get form data
+                const formData = new FormData(invoiceForm);
+                const jsonData = {};
+                
+                formData.forEach((value, key) => {
+                    jsonData[key] = value;
+                });
+                
+                // Add is_validated flag
+                jsonData.is_validated = 1;
+                
+                // Save to API
+                fetch('/api/update-pending/{{ invoice_id }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(jsonData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Now finalize
+                        return fetch('/api/finalize-invoice/{{ invoice_id }}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({})
+                        });
+                    } else {
+                        throw new Error(data.error || 'Failed to save changes');
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Invoice finalized successfully');
+                        // Check if in sequential mode using JS instead of Jinja
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const isSequential = urlParams.has('sequential');
+                        if (isSequential) {
+                            // If in sequential mode, go back to batch overview
+                            const batchId = urlParams.get('batch_id');
+                            window.location.href = '/sequential-validate/' + batchId;
+                        } else {
+                            // Otherwise go to files browser
+                            window.location.href = '/browser';
+                        }
+                    } else {
+                        alert('Error finalizing invoice: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error finalizing invoice: ' + error);
+                });
+            });
+        }
+        
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function() {
+                if (confirm('Cancel changes? Any unsaved changes will be lost.')) {
+                    // Check if in sequential mode using JS instead of Jinja
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const isSequential = urlParams.has('sequential');
+                    if (isSequential) {
+                        const batchId = urlParams.get('batch_id');
+                        window.location.href = '/sequential-validate/' + batchId;
+                    } else {
+                        window.location.href = '/browser';
+                    }
+                }
+            });
+        }
+
+        // Sequential processing script
+        {% if request.args.get('sequential') %}
+        // Get elements and variables for sequential processing
+        const sequentialSaveBtn = document.getElementById('sequential-save-continue');
+        const sequentialSkipBtn = document.getElementById('sequential-skip');
+        const sequentialBatchId = '{{ request.args.get("batch_id") }}';
+        const sequentialInvoiceId = '{{ invoice_id }}';
+
+        // Function to continue to next file
+        function sequentialContinueToNext() {
+            // Create processing overlay
+            const overlay = document.createElement('div');
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100%';
+            overlay.style.height = '100%';
+            overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            overlay.style.display = 'flex';
+            overlay.style.justifyContent = 'center';
+            overlay.style.alignItems = 'center';
+            overlay.style.zIndex = '9999';
+
+            const card = document.createElement('div');
+            card.className = 'card p-4';
+            card.innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border text-primary mb-3"></div>
+                    <h5>Processing next file...</h5>
+                    <p class="text-muted">Please wait while we prepare the next invoice.</p>
+                </div>
+            `;
+
+            overlay.appendChild(card);
+            document.body.appendChild(overlay);
+
+            // Call API to get next file
+            fetch('/api/batch-queue/continue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    batch_id: sequentialBatchId,
+                    pending_id: sequentialInvoiceId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.complete) {
+                        // Batch complete, go to summary
+                        window.location.href = '/sequential-validate/' + sequentialBatchId;
+                    } else {
+                        // Go to next file
+                        window.location.href = data.next_url;
+                    }
+                } else {
+                    document.body.removeChild(overlay);
+                    alert('Error: ' + (data.error || 'Unknown error occurred'));
+                }
+            })
+            .catch(error => {
+                document.body.removeChild(overlay);
+                console.error('Error:', error);
+                alert('Error: ' + error);
+            });
+        }
+
+        // Save and continue button click
+        if (sequentialSaveBtn) {
+            sequentialSaveBtn.addEventListener('click', function() {
+                // Collect form data
+                const formData = new FormData(invoiceForm);
+                const formObject = {};
+                
+                formData.forEach((value, key) => {
+                    formObject[key] = value;
+                });
+                
+                // Add invoice ID and mark as validated
+                formObject['invoice_id'] = sequentialInvoiceId;
+                formObject['is_validated'] = 1;
+                
+                // Save form data
+                fetch('/api/update-pending/' + sequentialInvoiceId, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formObject)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        sequentialContinueToNext();
+                    } else {
+                        alert('Error saving: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error: ' + error);
+                });
+            });
+        }
+
+        // Skip button click
+        if (sequentialSkipBtn) {
+            sequentialSkipBtn.addEventListener('click', function() {
+                if (confirm('Skip this file without saving changes?')) {
+                    sequentialContinueToNext();
+                }
+            });
+        }
+        {% endif %}
+    });
+</script>
+{% endblock %} 

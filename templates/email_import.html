@@ -1,0 +1,2111 @@
+{% extends "base.html" %}
+
+{% block title %}Email Invoice Import{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Import Invoices from Email</h1>
+    
+    <div class="row">
+        <!-- Email Connection Panel -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Email Connection</h5>
+                </div>
+                <div class="card-body">
+                    <div id="emailConnectionForm">
+                        <div id="savedAccountsSection" class="mb-3">
+                            <label for="savedAccounts" class="form-label">Saved Accounts</label>
+                            <select id="savedAccounts" class="form-select">
+                                <option value="">Select a saved account...</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="emailInput" class="form-label">Email Address</label>
+                            <input type="email" class="form-control" id="emailInput" placeholder="your@email.com">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="passwordInput" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="passwordInput">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="serverSelect" class="form-label">Mail Server</label>
+                            <select class="form-select" id="serverSelect">
+                                <option value="imap.gmail.com">Gmail</option>
+                                <option value="outlook.office365.com">Outlook/Office 365</option>
+                                <option value="imap.mail.yahoo.com">Yahoo Mail</option>
+                                <option value="custom">Custom IMAP Server</option>
+                            </select>
+                        </div>
+                        
+                        <div id="customServerSection" class="mb-3 d-none">
+                            <label for="customServerInput" class="form-label">Custom IMAP Server</label>
+                            <input type="text" class="form-control" id="customServerInput" placeholder="imap.example.com">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="portInput" class="form-label">Port</label>
+                            <input type="number" class="form-control" id="portInput" value="993">
+                        </div>
+                        
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="sslCheck" checked>
+                            <label class="form-check-label" for="sslCheck">Use SSL</label>
+                        </div>
+                        
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="saveCredentialsCheck">
+                            <label class="form-check-label" for="saveCredentialsCheck">Save credentials</label>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="delaySettings" class="form-label">Operation Delay (seconds)</label>
+                            <input type="range" class="form-range" id="delaySettings" min="3" max="10" value="5">
+                            <div class="d-flex justify-content-between">
+                                <small>3s</small>
+                                <small id="delayValue">5s</small>
+                                <small>10s</small>
+                            </div>
+                            <small class="form-text text-muted">Higher values improve reliability but slow down operations</small>
+                        </div>
+                        
+                        <button type="button" class="btn btn-primary" id="connectBtn">Connect to Email</button>
+                        <button type="button" class="btn btn-outline-secondary d-none" id="disconnectBtn">Disconnect</button>
+                    </div>
+                    
+                    <div id="connectionStatus" class="alert d-none"></div>
+                </div>
+            </div>
+
+            <!-- Connection Status Panel -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Connection Info</h5>
+                </div>
+                <div class="card-body">
+                    <div id="connectionInfo">
+                        <p><strong>Status:</strong> <span id="statusText">Not connected</span></p>
+                        <p><strong>Connected to:</strong> <span id="serverInfo">-</span></p>
+                        <p><strong>Session:</strong> <span id="sessionInfo">-</span></p>
+                        <p><strong>Last refresh:</strong> <span id="lastRefreshTime">-</span></p>
+                        <div class="progress d-none mb-2" id="sessionProgressBar">
+                            <div class="progress-bar" role="progressbar" style="width: 100%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Email Search and Results Panel -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Email Search</h5>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="reconnectBtn" disabled>
+                            <i class="bi bi-arrow-repeat"></i> Reconnect
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="mailboxSelect" class="form-label">Mailbox</label>
+                            <select class="form-select" id="mailboxSelect" disabled>
+                                <option value="INBOX">INBOX</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="maxEmailsInput" class="form-label">Max Emails to Fetch</label>
+                            <select class="form-select" id="maxEmailsInput" disabled>
+                                <option value="10">10 emails</option>
+                                <option value="25" selected>25 emails</option>
+                                <option value="50">50 emails</option>
+                                <option value="100">100 emails</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="searchCriteria" class="form-label">Search Criteria</label>
+                        <select class="form-select" id="searchCriteria" disabled>
+                            <option value="invoice">Emails with 'invoice' in subject</option>
+                            <option value="rechnung">Emails with 'rechnung' in subject</option>
+                            <option value="invoice_attachments">Emails with invoices as attachments</option>
+                            <option value="ALL" selected>All emails with attachments</option>
+                            <option value="UNSEEN">Unread emails with attachments</option>
+                            <option value="custom">Custom search criteria</option>
+                        </select>
+                    </div>
+                    
+                    <div id="customCriteriaSection" class="mb-3 d-none">
+                        <label for="customCriteriaInput" class="form-label">Custom Search Criteria</label>
+                        <input type="text" class="form-control" id="customCriteriaInput" placeholder="(SUBJECT invoice)">
+                    </div>
+                    
+                    <button type="button" class="btn btn-primary" id="searchEmailsBtn" disabled>
+                        <i class="bi bi-search"></i> Search Emails
+                    </button>
+                </div>
+            </div>
+            
+            <div id="emailResults" class="card mb-4 d-none">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Search Results</h5>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-success" id="processSelectedBtn" disabled>
+                            <i class="bi bi-arrow-right-circle"></i> Process Selected
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="loadMoreBtn">
+                            <i class="bi bi-arrow-down-circle"></i> Load More
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="resultsInfo" class="mb-2">
+                        <span id="resultCount">0</span> emails found
+                    </div>
+                    
+                    <div id="searchSpinner" class="text-center d-none">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p id="searchStatus">Searching emails...</p>
+                    </div>
+                    
+                    <div id="emailList" class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="40">
+                                        <input type="checkbox" class="form-check-input" id="selectAllEmails">
+                                    </th>
+                                    <th>Subject</th>
+                                    <th>From</th>
+                                    <th>Date</th>
+                                    <th>Attachments</th>
+                                    <th width="40"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="emailTableBody">
+                                <!-- Emails will be added here dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Processing Panel -->
+    <div id="processingPanel" class="card mb-4 d-none">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Processing Attachments</h5>
+        </div>
+        <div class="card-body">
+            <div id="processingInfo" class="mb-3">
+                <div class="progress mb-3">
+                    <div class="progress-bar" id="overallProgress" role="progressbar" style="width: 0%"></div>
+                </div>
+                <p class="mb-1"><strong>Overall Progress:</strong> <span id="overallProgressText">0/0</span></p>
+                <p class="mb-0"><strong>Current Operation:</strong> <span id="currentOperation">Waiting to start...</span></p>
+            </div>
+            
+            <div id="batchProcessingLog" class="border rounded p-3 bg-light" style="max-height: 200px; overflow-y: auto;">
+                <div id="processingLogContent"></div>
+            </div>
+            
+            <div class="text-end mt-3">
+                <button type="button" class="btn btn-secondary" id="cancelProcessingBtn">Cancel</button>
+                <button type="button" class="btn btn-success d-none" id="viewResultsBtn">View Results</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Email Details Modal -->
+<div class="modal fade" id="emailDetailsModal" tabindex="-1" aria-labelledby="emailDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="emailDetailsModalLabel">Email Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="emailDetailsContent">
+                    <div class="mb-3">
+                        <strong>Subject:</strong> <span id="modalSubject"></span>
+                    </div>
+                    <div class="mb-3">
+                        <strong>From:</strong> <span id="modalFrom"></span>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Date:</strong> <span id="modalDate"></span>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Attachments:</strong>
+                        <div id="modalAttachments" class="list-group mt-2">
+                            <!-- Attachments will be added here -->
+                        </div>
+                    </div>
+                    
+                    <ul class="nav nav-tabs" id="emailContentTabs">
+                        <li class="nav-item">
+                            <a class="nav-link active" id="text-tab" data-bs-toggle="tab" href="#textContent">Text</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="html-tab" data-bs-toggle="tab" href="#htmlContent">HTML</a>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content mt-2">
+                        <div class="tab-pane fade show active" id="textContent">
+                            <pre id="modalBodyText" class="border rounded p-3 bg-light" style="white-space: pre-wrap;"></pre>
+                        </div>
+                        <div class="tab-pane fade" id="htmlContent">
+                            <div id="modalBodyHtml" class="border rounded p-3 bg-light" style="max-height: 300px; overflow: auto;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="emailDetailSpinner" class="text-center d-none">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Loading email details...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="processEmailBtn">Process Attachments</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error/Status Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1" aria-labelledby="statusModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="statusModalLabel">Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="statusModalBody">
+                <!-- Status content will be added here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary d-none" id="statusModalActionBtn">Try Again</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Batch Results Modal -->
+<div class="modal fade" id="batchResultsModal" tabindex="-1" aria-labelledby="batchResultsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="batchResultsModalLabel">Processing Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="batchResultsContent">
+                    <!-- Batch results will be added here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="/pending-invoices" class="btn btn-primary">View Pending Invoices</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Core variables for email management
+let sessionId = null;
+let currentMailbox = 'INBOX';
+let searchOffset = 0;
+let emailCache = {};
+let loadedEmails = [];
+let isProcessing = false;
+let processingQueue = [];
+let currentBatchId = null;
+let keepAliveInterval = null;
+let sessionTimeoutTimer = null;
+let reconnectAttempts = 0;
+let MAX_RECONNECT_ATTEMPTS = 5;
+let DEFAULT_OPERATION_DELAY = 5000; // 5 seconds
+let attachmentProcessingQueue = [];
+let activeAttachmentDownloads = 0;
+const MAX_CONCURRENT_ATTACHMENTS = 3;
+let currentlyFetchingEmails = false;
+let lastActivity = Date.now();
+
+// Initialize on document ready
+document.addEventListener('DOMContentLoaded', function() {
+    initializeDelaySlider();
+    initializeFormEvents();
+    loadSavedAccounts();
+    
+    // Set up the session keep-alive timer (runs every 5 minutes)
+    setInterval(keepAliveSession, 5 * 60 * 1000);
+    
+    // Monitor user activity
+    ['mousedown', 'keydown', 'touchstart', 'scroll'].forEach(event => {
+        document.addEventListener(event, () => { lastActivity = Date.now(); });
+    });
+});
+
+function initializeDelaySlider() {
+    const delaySlider = document.getElementById('delaySettings');
+    const delayValue = document.getElementById('delayValue');
+    
+    delaySlider.addEventListener('input', function() {
+        delayValue.textContent = `${this.value}s`;
+        DEFAULT_OPERATION_DELAY = this.value * 1000; // Convert to milliseconds
+    });
+}
+
+function initializeFormEvents() {
+    // Server select change event
+    document.getElementById('serverSelect').addEventListener('change', function() {
+        const customServerSection = document.getElementById('customServerSection');
+        if (this.value === 'custom') {
+            customServerSection.classList.remove('d-none');
+        } else {
+            customServerSection.classList.add('d-none');
+        }
+        
+        // Set default port based on server
+        const portInput = document.getElementById('portInput');
+        portInput.value = '993'; // Default to SSL port
+        
+        // Default SSL to checked
+        document.getElementById('sslCheck').checked = true;
+    });
+    
+    // Search criteria change event
+    document.getElementById('searchCriteria').addEventListener('change', function() {
+        const customCriteriaSection = document.getElementById('customCriteriaSection');
+        if (this.value === 'custom') {
+            customCriteriaSection.classList.remove('d-none');
+        } else {
+            customCriteriaSection.classList.add('d-none');
+        }
+    });
+    
+    // Connect button click event with improved error handling
+    document.getElementById('connectBtn').addEventListener('click', connectToEmail);
+    
+    // Disconnect button click event
+    document.getElementById('disconnectBtn').addEventListener('click', disconnectFromEmail);
+    
+    // Search emails button click event with improved reliability
+    document.getElementById('searchEmailsBtn').addEventListener('click', function() {
+        searchEmails(0, true); // Reset search with zero offset
+    });
+    
+    // Load more button click event for pagination
+    document.getElementById('loadMoreBtn').addEventListener('click', function() {
+        searchEmails(loadedEmails.length, false); // Continue from current offset
+    });
+    
+    // Reconnect button
+    document.getElementById('reconnectBtn').addEventListener('click', function() {
+        reconnectEmailSession();
+    });
+    
+    // Select all emails checkbox
+    document.getElementById('selectAllEmails').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('#emailTableBody input[type="checkbox"]');
+        checkboxes.forEach(checkbox => { checkbox.checked = this.checked; });
+        updateProcessSelectedButton();
+    });
+    
+    // Process selected button
+    document.getElementById('processSelectedBtn').addEventListener('click', function() {
+        processSelectedEmails();
+    });
+    
+    // Cancel processing button
+    document.getElementById('cancelProcessingBtn').addEventListener('click', function() {
+        cancelProcessing();
+    });
+    
+    // Saved accounts selection
+    document.getElementById('savedAccounts').addEventListener('change', function() {
+        if (this.value) {
+            loadAccountDetails(this.value);
+        }
+    });
+}
+
+// Session Management - Keep Alive Mechanism
+function keepAliveSession() {
+    if (!sessionId) return;
+    
+    // If no user activity in last 30 minutes, don't keep session alive
+    if (Date.now() - lastActivity > 30 * 60 * 1000) {
+        console.log('No recent activity, not refreshing session');
+        return;
+    }
+    
+    console.log('Refreshing email session');
+    
+    // Use the NOOP command to keep the connection alive
+    fetch('/api/email/keepalive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            updateLastRefreshTime();
+            console.log('Session refreshed successfully');
+            reconnectAttempts = 0; // Reset reconnect counter on successful refresh
+        } else {
+            console.warn('Failed to refresh session', data.error);
+            // If keep-alive fails, try to reconnect
+            if (data.reconnect_required) {
+                smartReconnect();
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error during keep-alive:', error);
+        smartReconnect();
+    });
+}
+
+// Smart reconnection with exponential backoff
+function smartReconnect() {
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        showStatusModal('Connection Lost', 
+            `Reached maximum reconnection attempts (${MAX_RECONNECT_ATTEMPTS}). Please reconnect manually.`, 
+            'reconnect');
+        updateConnectionStatus('disconnected');
+        return;
+    }
+    
+    reconnectAttempts++;
+    
+    // Exponential backoff
+    const backoffDelay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempts));
+    
+    console.log(`Attempting reconnection ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${backoffDelay/1000} seconds`);
+    updateConnectionStatus('reconnecting', `Reconnecting in ${backoffDelay/1000}s (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+    
+    setTimeout(() => {
+        reconnectEmailSession();
+    }, backoffDelay);
+}
+
+function updateLastRefreshTime() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString();
+    document.getElementById('lastRefreshTime').textContent = timeString;
+    
+    // Update session progress bar
+    const progressBar = document.getElementById('sessionProgressBar');
+    progressBar.classList.remove('d-none');
+    const progressBarInner = progressBar.querySelector('.progress-bar');
+    progressBarInner.style.width = '100%';
+    
+    // Animated countdown of session health
+    clearTimeout(sessionTimeoutTimer);
+    
+    // 55-minute countdown (session typically expires at 60 minutes)
+    const countdownDuration = 55 * 60 * 1000;
+    const startTime = Date.now();
+    
+    function updateSessionProgress() {
+        const elapsed = Date.now() - startTime;
+        const remaining = countdownDuration - elapsed;
+        
+        if (remaining > 0) {
+            const percentage = (remaining / countdownDuration) * 100;
+            progressBarInner.style.width = `${percentage}%`;
+            
+            // Color transitions based on health
+            if (percentage > 66) {
+                progressBarInner.className = 'progress-bar bg-success';
+            } else if (percentage > 33) {
+                progressBarInner.className = 'progress-bar bg-warning';
+            } else {
+                progressBarInner.className = 'progress-bar bg-danger';
+            }
+            
+            sessionTimeoutTimer = setTimeout(updateSessionProgress, 30000); // Update every 30 seconds
+        } else {
+            progressBarInner.style.width = '0%';
+            progressBarInner.className = 'progress-bar bg-danger';
+        }
+    }
+    
+    updateSessionProgress();
+}
+
+// Account management functions
+function loadSavedAccounts() {
+    fetch('/api/email/accounts')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Loaded saved email accounts');
+            if (data.success && data.accounts) {
+                const selectElement = document.getElementById('savedAccounts');
+                // Clear existing options except the first one
+                while (selectElement.options.length > 1) {
+                    selectElement.remove(1);
+                }
+                
+                // Add accounts to select
+                data.accounts.forEach(account => {
+                    const option = document.createElement('option');
+                    option.value = account.id;
+                    option.textContent = account.email;
+                    selectElement.appendChild(option);
+                });
+                
+                if (data.accounts.length > 0) {
+                    document.getElementById('savedAccountsSection').classList.remove('d-none');
+                } else {
+                    document.getElementById('savedAccountsSection').classList.add('d-none');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading saved accounts:', error);
+        });
+}
+
+function loadAccountDetails(accountId) {
+    fetch(`/api/email/account/${accountId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.account) {
+                const account = data.account;
+                document.getElementById('emailInput').value = account.email;
+                document.getElementById('passwordInput').value = account.password;
+                document.getElementById('serverSelect').value = account.is_custom ? 'custom' : account.imap_server;
+                
+                if (account.is_custom) {
+                    document.getElementById('customServerSection').classList.remove('d-none');
+                    document.getElementById('customServerInput').value = account.custom_server || account.imap_server;
+                } else {
+                    document.getElementById('customServerSection').classList.add('d-none');
+                }
+                
+                document.getElementById('portInput').value = account.port;
+                document.getElementById('sslCheck').checked = account.use_ssl;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading account details:', error);
+        });
+}
+
+// Connection functions with improved reliability
+function connectToEmail() {
+    const email = document.getElementById('emailInput').value;
+    const password = document.getElementById('passwordInput').value;
+    const server = document.getElementById('serverSelect').value;
+    const customServer = document.getElementById('customServerInput').value;
+    const port = document.getElementById('portInput').value;
+    const useSSL = document.getElementById('sslCheck').checked;
+    const saveAccount = document.getElementById('saveCredentialsCheck').checked;
+    
+    if (!email || !password) {
+        showStatusModal('Missing Information', 'Please provide both email and password.');
+        return;
+    }
+    
+    if (server === 'custom' && !customServer) {
+        showStatusModal('Missing Information', 'Please provide a custom server address.');
+        return;
+    }
+    
+    // Update UI for connecting state
+    updateConnectionStatus('connecting');
+    
+    // Prepare request data
+    const data = {
+        email: email,
+        password: password,
+        imap_server: server,
+        port: parseInt(port),
+        use_ssl: useSSL,
+        save_account: saveAccount
+    };
+    
+    if (server === 'custom') {
+        data.is_custom = true;
+        data.custom_server = customServer;
+    }
+    
+    // Send connection request
+    fetch('/api/email/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            sessionId = data.session_id;
+            updateConnectionStatus('connected');
+            updateUIForConnection(true);
+            loadMailboxes();
+            
+            // Start the keep-alive mechanism
+            if (keepAliveInterval) {
+                clearInterval(keepAliveInterval);
+            }
+            keepAliveInterval = setInterval(keepAliveSession, 5 * 60 * 1000); // Check every 5 minutes
+            updateLastRefreshTime();
+            
+            // Reset connection attempts counter
+            reconnectAttempts = 0;
+            
+            if (data.account_id) {
+                loadSavedAccounts(); // Reload accounts list if credentials were saved
+            }
+        } else {
+            updateConnectionStatus('error', data.error);
+            showStatusModal('Connection Error', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error connecting to email:', error);
+        updateConnectionStatus('error', 'Error connecting to server. Please try again.');
+        showStatusModal('Connection Error', 'Failed to connect to the server. Please check your network connection and try again.');
+    });
+}
+
+function disconnectFromEmail() {
+    if (!sessionId) return;
+    
+    updateConnectionStatus('disconnecting');
+    
+    fetch('/api/email/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            cleanupSession();
+            updateConnectionStatus('disconnected');
+            updateUIForConnection(false);
+        } else {
+            updateConnectionStatus('error', data.error);
+            // Force disconnect the UI even if the server had issues
+            cleanupSession();
+            updateUIForConnection(false);
+        }
+    })
+    .catch(error => {
+        console.error('Error disconnecting:', error);
+        // Force disconnect the UI even if there was an error
+        cleanupSession();
+        updateConnectionStatus('disconnected');
+        updateUIForConnection(false);
+    });
+}
+
+function cleanupSession() {
+    // Clear session data
+    sessionId = null;
+    loadedEmails = [];
+    emailCache = {};
+    searchOffset = 0;
+    currentMailbox = 'INBOX';
+    
+    // Clear timers and intervals
+    if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+        keepAliveInterval = null;
+    }
+    
+    if (sessionTimeoutTimer) {
+        clearTimeout(sessionTimeoutTimer);
+        sessionTimeoutTimer = null;
+    }
+    
+    // Reset UI elements
+    document.getElementById('emailTableBody').innerHTML = '';
+    document.getElementById('emailResults').classList.add('d-none');
+    document.getElementById('sessionProgressBar').classList.add('d-none');
+}
+
+function reconnectEmailSession() {
+    // Only attempt reconnection if we have a session ID
+    if (!sessionId) {
+        connectToEmail(); // If no session, just connect normally
+        return;
+    }
+    
+    updateConnectionStatus('reconnecting');
+    
+    // First try to disconnect cleanly if possible
+    fetch('/api/email/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId })
+    })
+    .catch(error => {
+        console.warn('Error during disconnect before reconnect:', error);
+        // Continue with reconnection even if disconnect fails
+    })
+    .finally(() => {
+        // Get the current connection details
+        const email = document.getElementById('emailInput').value;
+        const password = document.getElementById('passwordInput').value;
+        const server = document.getElementById('serverSelect').value;
+        const customServer = document.getElementById('customServerInput').value;
+        const port = document.getElementById('portInput').value;
+        const useSSL = document.getElementById('sslCheck').checked;
+        
+        // Reset session ID
+        sessionId = null;
+        
+        // Prepare reconnection data
+        const data = {
+            email: email,
+            password: password,
+            imap_server: server,
+            port: parseInt(port),
+            use_ssl: useSSL,
+            save_account: false // Don't save again when reconnecting
+        };
+        
+        if (server === 'custom') {
+            data.is_custom = true;
+            data.custom_server = customServer;
+        }
+        
+        // Send reconnection request
+        fetch('/api/email/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                sessionId = data.session_id;
+                updateConnectionStatus('connected', 'Reconnected successfully');
+                
+                // Restart keep-alive
+                if (keepAliveInterval) {
+                    clearInterval(keepAliveInterval);
+                }
+                keepAliveInterval = setInterval(keepAliveSession, 5 * 60 * 1000);
+                updateLastRefreshTime();
+                
+                // Reset reconnect attempts counter
+                reconnectAttempts = 0;
+                
+                // Re-enable search button
+                document.getElementById('searchEmailsBtn').disabled = false;
+                document.getElementById('mailboxSelect').disabled = false;
+                document.getElementById('maxEmailsInput').disabled = false;
+                document.getElementById('searchCriteria').disabled = false;
+                
+                // Get mailboxes again
+                loadMailboxes();
+            } else {
+                updateConnectionStatus('error', data.error);
+                
+                // If reconnect failed, try again with exponential backoff
+                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    smartReconnect();
+                } else {
+                    showStatusModal('Reconnection Failed', 
+                        'Failed to reconnect after multiple attempts. Please check your connection settings and try again.', 
+                        'reconnect');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error during reconnection:', error);
+            updateConnectionStatus('error', 'Failed to reconnect');
+            
+            // If reconnect failed, try again with exponential backoff
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                smartReconnect();
+            } else {
+                showStatusModal('Reconnection Failed', 
+                    'Failed to reconnect after multiple attempts. Please check your connection settings and try again.', 
+                    'reconnect');
+            }
+        });
+    });
+}
+
+// UI Utility functions
+function updateConnectionStatus(status, message = '') {
+    const statusText = document.getElementById('statusText');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const serverInfo = document.getElementById('serverInfo');
+    const sessionInfo = document.getElementById('sessionInfo');
+    
+    switch (status) {
+        case 'connecting':
+            statusText.textContent = 'Connecting...';
+            statusText.className = 'text-warning';
+            connectionStatus.textContent = 'Establishing connection to email server...';
+            connectionStatus.className = 'alert alert-warning';
+            connectionStatus.classList.remove('d-none');
+            break;
+            
+        case 'connected':
+            statusText.textContent = 'Connected';
+            statusText.className = 'text-success';
+            serverInfo.textContent = document.getElementById('serverSelect').value === 'custom' 
+                ? document.getElementById('customServerInput').value 
+                : document.getElementById('serverSelect').value;
+            sessionInfo.textContent = `Active (ID: ${sessionId.substr(0, 8)}...)`;
+            
+            if (message) {
+                connectionStatus.textContent = message;
+                connectionStatus.className = 'alert alert-success';
+                connectionStatus.classList.remove('d-none');
+                setTimeout(() => {
+                    connectionStatus.classList.add('d-none');
+                }, 5000);
+            } else {
+                connectionStatus.classList.add('d-none');
+            }
+            break;
+            
+        case 'disconnecting':
+            statusText.textContent = 'Disconnecting...';
+            statusText.className = 'text-warning';
+            connectionStatus.textContent = 'Closing connection...';
+            connectionStatus.className = 'alert alert-warning';
+            connectionStatus.classList.remove('d-none');
+            break;
+            
+        case 'disconnected':
+            statusText.textContent = 'Not connected';
+            statusText.className = 'text-secondary';
+            serverInfo.textContent = '-';
+            sessionInfo.textContent = '-';
+            document.getElementById('lastRefreshTime').textContent = '-';
+            connectionStatus.classList.add('d-none');
+            break;
+            
+        case 'error':
+            statusText.textContent = 'Error';
+            statusText.className = 'text-danger';
+            connectionStatus.textContent = message || 'An error occurred with the email connection.';
+            connectionStatus.className = 'alert alert-danger';
+            connectionStatus.classList.remove('d-none');
+            break;
+            
+        case 'reconnecting':
+            statusText.textContent = 'Reconnecting...';
+            statusText.className = 'text-warning';
+            connectionStatus.textContent = message || 'Attempting to reconnect...';
+            connectionStatus.className = 'alert alert-warning';
+            connectionStatus.classList.remove('d-none');
+            document.getElementById('reconnectBtn').disabled = true;
+            break;
+    }
+}
+
+function updateUIForConnection(isConnected) {
+    // Update buttons
+    document.getElementById('connectBtn').classList.toggle('d-none', isConnected);
+    document.getElementById('disconnectBtn').classList.toggle('d-none', !isConnected);
+    document.getElementById('reconnectBtn').disabled = !isConnected;
+    
+    // Update form fields
+    const formFields = [
+        'emailInput', 'passwordInput', 'serverSelect', 
+        'customServerInput', 'portInput', 'sslCheck', 
+        'saveCredentialsCheck', 'savedAccounts'
+    ];
+    
+    formFields.forEach(id => {
+        document.getElementById(id).disabled = isConnected;
+    });
+    
+    // Enable/disable search controls
+    document.getElementById('searchEmailsBtn').disabled = !isConnected;
+    document.getElementById('mailboxSelect').disabled = !isConnected;
+    document.getElementById('maxEmailsInput').disabled = !isConnected;
+    document.getElementById('searchCriteria').disabled = !isConnected;
+    
+    if (!isConnected) {
+        document.getElementById('customCriteriaInput').disabled = true;
+    } else {
+        const searchCriteria = document.getElementById('searchCriteria');
+        document.getElementById('customCriteriaInput').disabled = searchCriteria.value !== 'custom';
+    }
+}
+
+function loadMailboxes() {
+    if (!sessionId) return;
+    
+    fetch(`/api/email/mailboxes/${sessionId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const mailboxSelect = document.getElementById('mailboxSelect');
+                // Clear existing options
+                mailboxSelect.innerHTML = '';
+                
+                // Add the mailboxes
+                data.mailboxes.forEach(mailbox => {
+                    const option = document.createElement('option');
+                    option.value = mailbox;
+                    option.textContent = mailbox;
+                    mailboxSelect.appendChild(option);
+                });
+                
+                // Default to INBOX
+                if (data.mailboxes.includes('INBOX')) {
+                    mailboxSelect.value = 'INBOX';
+                }
+                
+                currentMailbox = mailboxSelect.value;
+            } else {
+                console.error('Error loading mailboxes:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading mailboxes:', error);
+            if (error.toString().includes('network') || error.toString().includes('failed')) {
+                smartReconnect();
+            }
+        });
+}
+
+function showStatusModal(title, message, actionType = null) {
+    const modal = new bootstrap.Modal(document.getElementById('statusModal'));
+    document.getElementById('statusModalLabel').textContent = title;
+    document.getElementById('statusModalBody').innerHTML = message;
+    
+    const actionButton = document.getElementById('statusModalActionBtn');
+    
+    if (actionType) {
+        actionButton.classList.remove('d-none');
+        
+        if (actionType === 'reconnect') {
+            actionButton.textContent = 'Reconnect';
+            actionButton.onclick = () => {
+                modal.hide();
+                reconnectEmailSession();
+            };
+        } else if (actionType === 'retry') {
+            actionButton.textContent = 'Try Again';
+            actionButton.onclick = () => {
+                modal.hide();
+                searchEmails(0, true);
+            };
+        } else {
+            actionButton.classList.add('d-none');
+        }
+    } else {
+        actionButton.classList.add('d-none');
+    }
+    
+    modal.show();
+}
+
+// Email search function with improved pagination and reliability
+function searchEmails(offset = 0, resetResults = true) {
+    if (!sessionId) {
+        showStatusModal('Not Connected', 'Please connect to an email server first.');
+        return;
+    }
+    
+    // Get search parameters
+    const mailbox = document.getElementById('mailboxSelect').value;
+    const maxEmails = parseInt(document.getElementById('maxEmailsInput').value);
+    const searchType = document.getElementById('searchCriteria').value;
+    const customCriteria = document.getElementById('customCriteriaInput').value;
+    
+    // Determine search criteria based on selection
+    let criteria = '';
+    switch (searchType) {
+        case 'invoice':
+            criteria = '(OR (SUBJECT "invoice") (SUBJECT "Invoice"))';
+            break;
+        case 'rechnung':
+            criteria = '(OR (SUBJECT "rechnung") (SUBJECT "Rechnung"))';
+            break;
+        case 'invoice_attachments':
+            criteria = '(OR (SUBJECT "invoice") (SUBJECT "rechnung") (SUBJECT "bill") (SUBJECT "payment") (HEADER Content-Type "application/pdf"))';
+            break;
+        case 'UNSEEN':
+            criteria = 'UNSEEN';
+            break;
+        case 'custom':
+            criteria = customCriteria;
+            break;
+        default: // ALL
+            criteria = 'ALL';
+    }
+    
+    // Update UI for searching state
+    const searchBtn = document.getElementById('searchEmailsBtn');
+    const searchSpinner = document.getElementById('searchSpinner');
+    const searchStatus = document.getElementById('searchStatus');
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    
+    searchBtn.disabled = true;
+    loadMoreBtn.disabled = true;
+    searchSpinner.classList.remove('d-none');
+    searchStatus.textContent = 'Searching emails...';
+    
+    // If resetting results, clear the table and store
+    if (resetResults) {
+        document.getElementById('emailTableBody').innerHTML = '';
+        loadedEmails = [];
+        searchOffset = 0;
+        currentlyFetchingEmails = true;
+    } else {
+        searchOffset = offset;
+        loadMoreBtn.disabled = true;
+        currentlyFetchingEmails = true;
+    }
+    
+    // Log the search attempt
+    console.log(`Searching for emails containing invoices...`);
+    
+    // Check if we have cached results for this search
+    const cacheKey = `${mailbox}_${criteria}_${offset}_${maxEmails}`;
+    
+    if (emailCache[cacheKey] && !resetResults) {
+        console.log(`Using cached results for ${cacheKey}`);
+        displayEmailResults(emailCache[cacheKey], offset, resetResults);
+        return;
+    }
+    
+    // Add a small delay to improve reliability
+    setTimeout(() => {
+        // Make the search request with retry mechanism
+        makeSearchRequest(mailbox, criteria, maxEmails, offset, resetResults, 0);
+    }, DEFAULT_OPERATION_DELAY / 2); // Half the default delay for search
+}
+
+// Make search request with retry mechanism
+function makeSearchRequest(mailbox, criteria, maxEmails, offset, resetResults, retryCount) {
+    const maxRetries = 3;
+    
+    if (retryCount >= maxRetries) {
+        handleSearchError(`Failed after ${maxRetries} attempts. Please try again.`, true);
+        return;
+    }
+    
+    // Send search request to server
+    fetch('/api/email/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            session_id: sessionId,
+            mailbox: mailbox,
+            criteria: criteria,
+            max_emails: maxEmails,
+            offset: offset,
+            delay: document.getElementById('delaySettings').value // Use configurable delay
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Server responded with status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Cache the successful response
+            const cacheKey = `${mailbox}_${criteria}_${offset}_${maxEmails}`;
+            emailCache[cacheKey] = data;
+            
+            // Update UI with results
+            displayEmailResults(data, offset, resetResults);
+        } else {
+            // Handle server-side error
+            if (data.error && data.error.includes('session')) {
+                // Session expired error, attempt reconnection
+                console.log('Search error: ' + data.error);
+                handleSearchError('Email session expired. Attempting to reconnect...', false);
+                smartReconnect();
+            } else {
+                // Other errors
+                handleSearchError(data.error || 'Unknown error occurred', true);
+                
+                // Retry with increasing delay if it makes sense
+                if (!data.error || !data.error.includes('invalid') && !data.error.includes('not found')) {
+                    const retryDelay = calculateRetryDelay(retryCount);
+                    console.log(`Retrying search in ${retryDelay/1000} seconds (attempt ${retryCount + 1}/${maxRetries})`);
+                    setTimeout(() => {
+                        makeSearchRequest(mailbox, criteria, maxEmails, offset, resetResults, retryCount + 1);
+                    }, retryDelay);
+                }
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Search error:', error);
+        
+        // Network or other error, retry with exponential backoff
+        const retryDelay = calculateRetryDelay(retryCount);
+        handleSearchError(`Error: ${error.message}. Retrying in ${retryDelay/1000} seconds...`, false);
+        
+        setTimeout(() => {
+            makeSearchRequest(mailbox, criteria, maxEmails, offset, resetResults, retryCount + 1);
+        }, retryDelay);
+    });
+}
+
+// Calculate retry delay with exponential backoff
+function calculateRetryDelay(retryCount) {
+    // Base delay (3 seconds) with exponential increase, capped at 30 seconds
+    return Math.min(30000, 3000 * Math.pow(2, retryCount));
+}
+
+// Handle search errors
+function handleSearchError(errorMessage, isFinal) {
+    const searchBtn = document.getElementById('searchEmailsBtn');
+    const searchSpinner = document.getElementById('searchSpinner');
+    const searchStatus = document.getElementById('searchStatus');
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    
+    if (isFinal) {
+        // Final error state
+        searchBtn.disabled = false;
+        loadMoreBtn.disabled = true;
+        searchSpinner.classList.add('d-none');
+        currentlyFetchingEmails = false;
+        
+        // Show error modal
+        showStatusModal('Search Error', errorMessage, 'retry');
+    } else {
+        // Temporary error, show in status but don't stop spinner
+        searchStatus.textContent = errorMessage;
+    }
+}
+
+// Display email search results
+function displayEmailResults(data, offset, resetResults) {
+    const searchBtn = document.getElementById('searchEmailsBtn');
+    const searchSpinner = document.getElementById('searchSpinner');
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    const emailResults = document.getElementById('emailResults');
+    const resultCount = document.getElementById('resultCount');
+    const emailTableBody = document.getElementById('emailTableBody');
+    
+    // Re-enable search button
+    searchBtn.disabled = false;
+    searchSpinner.classList.add('d-none');
+    currentlyFetchingEmails = false;
+    
+    // Show results container
+    emailResults.classList.remove('d-none');
+    
+    // Update result count
+    resultCount.textContent = data.total_count;
+    
+    // Enable/disable load more button based on whether there are more emails to fetch
+    const currentShownCount = resetResults ? data.emails.length : (loadedEmails.length + data.emails.length);
+    loadMoreBtn.disabled = currentShownCount >= data.total_count;
+    
+    // If starting fresh, clear the table
+    if (resetResults) {
+        emailTableBody.innerHTML = '';
+        loadedEmails = [];
+    }
+    
+    // Process and display the emails
+    data.emails.forEach(email => {
+        // Add to loaded emails array
+        loadedEmails.push(email);
+        
+        // Create table row
+        const row = document.createElement('tr');
+        row.classList.add(email.is_read ? '' : 'table-active');
+        
+        // Add checkbox column
+        const checkboxCell = document.createElement('td');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'form-check-input email-checkbox';
+        checkbox.dataset.emailId = email.id;
+        checkbox.addEventListener('change', updateProcessSelectedButton);
+        checkboxCell.appendChild(checkbox);
+        row.appendChild(checkboxCell);
+        
+        // Add subject column
+        const subjectCell = document.createElement('td');
+        const subjectLink = document.createElement('a');
+        subjectLink.href = '#';
+        subjectLink.textContent = email.subject || '(No Subject)';
+        subjectLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            showEmailDetails(email.id);
+        });
+        
+        // Add invoice badge if it looks like an invoice
+        if (email.isInvoiceRelated) {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-success ms-2';
+            badge.textContent = 'Invoice';
+            subjectLink.appendChild(badge);
+        }
+        
+        subjectCell.appendChild(subjectLink);
+        row.appendChild(subjectCell);
+        
+        // Add from column
+        const fromCell = document.createElement('td');
+        fromCell.textContent = email.from;
+        row.appendChild(fromCell);
+        
+        // Add date column
+        const dateCell = document.createElement('td');
+        dateCell.textContent = email.date;
+        row.appendChild(dateCell);
+        
+        // Add attachments column
+        const attachmentsCell = document.createElement('td');
+        if (email.hasAttachment) {
+            const attachmentBadge = document.createElement('span');
+            attachmentBadge.className = 'badge bg-primary';
+            attachmentBadge.textContent = 'Has Attachments';
+            attachmentsCell.appendChild(attachmentBadge);
+        } else {
+            attachmentsCell.textContent = '-';
+        }
+        row.appendChild(attachmentsCell);
+        
+        // Add action column
+        const actionCell = document.createElement('td');
+        const viewBtn = document.createElement('button');
+        viewBtn.type = 'button';
+        viewBtn.className = 'btn btn-sm btn-outline-primary';
+        viewBtn.innerHTML = '<i class="bi bi-eye"></i>';
+        viewBtn.title = 'View Details';
+        viewBtn.addEventListener('click', function() {
+            showEmailDetails(email.id);
+        });
+        actionCell.appendChild(viewBtn);
+        row.appendChild(actionCell);
+        
+        // Add to table
+        emailTableBody.appendChild(row);
+    });
+    
+    // Update the process selected button state
+    updateProcessSelectedButton();
+}
+
+// Update the "Process Selected" button state
+function updateProcessSelectedButton() {
+    const checkboxes = document.querySelectorAll('#emailTableBody input[type="checkbox"]:checked');
+    const processBtn = document.getElementById('processSelectedBtn');
+    processBtn.disabled = checkboxes.length === 0;
+}
+
+// Show email details in modal
+function showEmailDetails(emailId) {
+    // Find the email in our loaded emails
+    const email = loadedEmails.find(e => e.id === emailId);
+    if (!email) return;
+    
+    // Initialize the modal
+    const modal = new bootstrap.Modal(document.getElementById('emailDetailsModal'));
+    const modalSubject = document.getElementById('modalSubject');
+    const modalFrom = document.getElementById('modalFrom');
+    const modalDate = document.getElementById('modalDate');
+    const modalBodyText = document.getElementById('modalBodyText');
+    const modalBodyHtml = document.getElementById('modalBodyHtml');
+    const modalAttachments = document.getElementById('modalAttachments');
+    const emailDetailSpinner = document.getElementById('emailDetailSpinner');
+    const emailDetailsContent = document.getElementById('emailDetailsContent');
+    const processEmailBtn = document.getElementById('processEmailBtn');
+    
+    // Set the process button handler
+    processEmailBtn.onclick = function() {
+        modal.hide();
+        processSingleEmail(emailId);
+    };
+    
+    // Update basic info from cached data
+    modalSubject.textContent = email.subject || '(No Subject)';
+    modalFrom.textContent = email.from;
+    modalDate.textContent = email.date;
+    
+    // Show loading state
+    emailDetailsContent.classList.add('d-none');
+    emailDetailSpinner.classList.remove('d-none');
+    modalBodyText.textContent = '';
+    modalBodyHtml.innerHTML = '';
+    modalAttachments.innerHTML = '';
+    
+    // Show the modal
+    modal.show();
+    
+    // Load detailed email content with delay to improve reliability
+    setTimeout(() => {
+        fetchEmailDetails(emailId);
+    }, DEFAULT_OPERATION_DELAY);
+}
+
+// Fetch email details with retry mechanism
+function fetchEmailDetails(emailId, retryCount = 0) {
+    const maxRetries = 3;
+    
+    if (retryCount >= maxRetries) {
+        const emailDetailSpinner = document.getElementById('emailDetailSpinner');
+        const emailDetailsContent = document.getElementById('emailDetailsContent');
+        
+        emailDetailSpinner.classList.add('d-none');
+        emailDetailsContent.classList.remove('d-none');
+        
+        document.getElementById('modalBodyText').textContent = 'Failed to load email details after multiple attempts.';
+        return;
+    }
+    
+    fetch('/api/email/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            session_id: sessionId,
+            email_id: emailId,
+            delay: document.getElementById('delaySettings').value // Use configurable delay
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            displayEmailDetails(data.email);
+        } else {
+            console.error('Error fetching email details:', data.error);
+            
+            // If session expired, attempt reconnection
+            if (data.error && data.error.includes('session')) {
+                smartReconnect();
+            }
+            
+            // Retry with backoff
+            const retryDelay = calculateRetryDelay(retryCount);
+            console.log(`Retrying fetch email details in ${retryDelay/1000} seconds (attempt ${retryCount + 1}/${maxRetries})`);
+            setTimeout(() => {
+                fetchEmailDetails(emailId, retryCount + 1);
+            }, retryDelay);
+        }
+    })
+    .catch(error => {
+        console.error('Error fetching email details:', error);
+        
+        // Retry with backoff
+        const retryDelay = calculateRetryDelay(retryCount);
+        setTimeout(() => {
+            fetchEmailDetails(emailId, retryCount + 1);
+        }, retryDelay);
+    });
+}
+
+// Display email details in the modal
+function displayEmailDetails(email) {
+    const modalBodyText = document.getElementById('modalBodyText');
+    const modalBodyHtml = document.getElementById('modalBodyHtml');
+    const modalAttachments = document.getElementById('modalAttachments');
+    const emailDetailSpinner = document.getElementById('emailDetailSpinner');
+    const emailDetailsContent = document.getElementById('emailDetailsContent');
+    
+    // Set email content
+    modalBodyText.textContent = email.body || 'No text content available';
+    modalBodyHtml.innerHTML = email.html_body || '<p>No HTML content available</p>';
+    
+    // Display attachments
+    modalAttachments.innerHTML = '';
+    if (email.attachments && email.attachments.length > 0) {
+        email.attachments.forEach(attachment => {
+            const attachmentItem = document.createElement('div');
+            attachmentItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+            
+            const attachmentInfo = document.createElement('div');
+            attachmentInfo.innerHTML = `
+                <i class="bi bi-file-earmark"></i> 
+                <strong>${attachment.filename}</strong>
+                <br>
+                <small class="text-muted">${attachment.mime_type} • ${formatFileSize(attachment.size)}</small>
+            `;
+            
+            const downloadBtn = document.createElement('button');
+            downloadBtn.type = 'button';
+            downloadBtn.className = 'btn btn-sm btn-outline-primary';
+            downloadBtn.innerHTML = '<i class="bi bi-download"></i>';
+            downloadBtn.onclick = function() {
+                downloadAttachment(email.id, attachment.id, attachment.filename);
+            };
+            
+            attachmentItem.appendChild(attachmentInfo);
+            attachmentItem.appendChild(downloadBtn);
+            modalAttachments.appendChild(attachmentItem);
+        });
+    } else {
+        modalAttachments.innerHTML = '<div class="list-group-item">No attachments found</div>';
+    }
+    
+    // Show content, hide spinner
+    emailDetailSpinner.classList.add('d-none');
+    emailDetailsContent.classList.remove('d-none');
+}
+
+// Helper function to format file size
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' bytes';
+    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    else return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+// Download a single attachment with retry mechanism
+function downloadAttachment(emailId, attachmentId, filename, retryCount = 0, processingCallback = null) {
+    const maxRetries = 3;
+    
+    if (retryCount >= maxRetries) {
+        if (processingCallback) {
+            processingCallback({
+                success: false,
+                error: `Failed to download attachment after ${maxRetries} attempts`,
+                filename: filename
+            });
+        }
+        return;
+    }
+    
+    // Log attempt
+    console.log(`Downloading attachment: ${filename} (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    
+    if (processingCallback) {
+        processingCallback({
+            status: 'downloading',
+            message: `Downloading ${filename}... (attempt ${retryCount + 1}/${maxRetries + 1})`,
+            filename: filename
+        });
+    }
+    
+    fetch('/api/email/download-attachment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            session_id: sessionId,
+            email_id: emailId,
+            attachment_id: attachmentId,
+            delay: document.getElementById('delaySettings').value // Use configurable delay
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (processingCallback) {
+                processingCallback({
+                    success: true,
+                    file_path: data.file_path,
+                    download_url: data.download_url,
+                    filename: data.filename,
+                    from: data.from,
+                    subject: data.subject
+                });
+            }
+        } else {
+            console.error('Error downloading attachment:', data.error);
+            
+            // If session expired, attempt reconnection
+            if (data.error && data.error.includes('session')) {
+                smartReconnect();
+                
+                if (processingCallback) {
+                    processingCallback({
+                        status: 'reconnecting',
+                        message: 'Session expired. Reconnecting...',
+                        filename: filename
+                    });
+                }
+                return;
+            }
+            
+            // Retry with exponential backoff
+            const retryDelay = calculateRetryDelay(retryCount);
+            console.log(`Retrying download in ${retryDelay/1000} seconds`);
+            
+            if (processingCallback) {
+                processingCallback({
+                    status: 'retrying',
+                    message: `Download failed. Retrying in ${retryDelay/1000}s...`,
+                    filename: filename
+                });
+            }
+            
+            setTimeout(() => {
+                downloadAttachment(emailId, attachmentId, filename, retryCount + 1, processingCallback);
+            }, retryDelay);
+        }
+    })
+    .catch(error => {
+        console.error('Error downloading attachment:', error);
+        
+        // Retry with exponential backoff
+        const retryDelay = calculateRetryDelay(retryCount);
+        
+        if (processingCallback) {
+            processingCallback({
+                status: 'retrying',
+                message: `Download error: ${error.message}. Retrying in ${retryDelay/1000}s...`,
+                filename: filename
+            });
+        }
+        
+        setTimeout(() => {
+            downloadAttachment(emailId, attachmentId, filename, retryCount + 1, processingCallback);
+        }, retryDelay);
+    });
+}
+
+// Process a single email's attachments
+function processSingleEmail(emailId) {
+    // Find the email in loaded emails
+    const email = loadedEmails.find(e => e.id === emailId);
+    if (!email) return;
+    
+    // Reset the processing panel
+    resetProcessingPanel();
+    
+    // Show processing panel
+    document.getElementById('processingPanel').classList.remove('d-none');
+    document.getElementById('currentOperation').textContent = `Loading email ${email.subject}...`;
+    addToProcessingLog(`Starting to process email: "${email.subject}"`);
+    
+    // Fetch the email details to get attachments
+    fetchEmailDetails(emailId, 0, function(emailDetails) {
+        if (!emailDetails || !emailDetails.attachments || emailDetails.attachments.length === 0) {
+            addToProcessingLog('No attachments found in this email', 'warning');
+            return;
+        }
+        
+        // Add attachments to processing queue
+        attachmentProcessingQueue = emailDetails.attachments.map(attachment => ({
+            emailId: emailId,
+            attachmentId: attachment.id,
+            filename: attachment.filename,
+            email: email
+        }));
+        
+        // Update progress bar and info
+        updateOverallProgress(0, attachmentProcessingQueue.length);
+        addToProcessingLog(`Found ${attachmentProcessingQueue.length} attachments to process`);
+        
+        // Start processing the queue
+        processNextAttachment();
+    });
+}
+
+// Process multiple selected emails
+function processSelectedEmails() {
+    // Get all checked emails
+    const checkedEmails = document.querySelectorAll('#emailTableBody input[type="checkbox"]:checked');
+    if (checkedEmails.length === 0) return;
+    
+    // Get email IDs
+    const emailIds = Array.from(checkedEmails).map(checkbox => checkbox.dataset.emailId);
+    
+    // Reset processing panel
+    resetProcessingPanel();
+    
+    // Show processing panel
+    document.getElementById('processingPanel').classList.remove('d-none');
+    document.getElementById('currentOperation').textContent = `Preparing to process ${emailIds.length} emails...`;
+    addToProcessingLog(`Starting to process ${emailIds.length} selected emails`);
+    
+    // Create email processing queue
+    processingQueue = emailIds.map(id => ({
+        emailId: id,
+        email: loadedEmails.find(e => e.id === id),
+        status: 'pending'
+    }));
+    
+    // Initialize batch
+    currentBatchId = null;
+    
+    // Start processing emails one by one
+    processNextEmail();
+}
+
+// Process the next email in the queue
+function processNextEmail() {
+    // Check if there are any emails left to process
+    if (processingQueue.length === 0) {
+        finishProcessing();
+        return;
+    }
+    
+    // Get the next email to process
+    const emailToProcess = processingQueue[0];
+    
+    // Update UI
+    updateOverallProgress(processingQueue.length - 1, processingQueue.length);
+    document.getElementById('currentOperation').textContent = `Processing email: ${emailToProcess.email.subject}`;
+    addToProcessingLog(`Processing email: "${emailToProcess.email.subject}"`);
+    
+    // Fetch email details to get attachments
+    fetchEmailWithRetry(emailToProcess.emailId, function(emailDetails) {
+        if (!emailDetails || !emailDetails.success) {
+            // Handle error and move to next email
+            addToProcessingLog(`Failed to fetch email details: ${emailDetails?.error || 'Unknown error'}`, 'error');
+            processingQueue.shift(); // Remove from queue
+            
+            // Add delay before processing next email
+            setTimeout(processNextEmail, DEFAULT_OPERATION_DELAY);
+            return;
+        }
+        
+        // If no attachments, skip to next email
+        if (!emailDetails.email.attachments || emailDetails.email.attachments.length === 0) {
+            addToProcessingLog('No attachments found in this email, skipping', 'warning');
+            processingQueue.shift(); // Remove from queue
+            
+            // Add delay before processing next email
+            setTimeout(processNextEmail, DEFAULT_OPERATION_DELAY);
+            return;
+        }
+        
+        // Add attachments to processing queue
+        const attachments = emailDetails.email.attachments;
+        addToProcessingLog(`Found ${attachments.length} attachments`);
+        
+        // Create email attachment processing queue
+        attachmentProcessingQueue = attachments.map(attachment => ({
+            emailId: emailToProcess.emailId,
+            attachmentId: attachment.id,
+            filename: attachment.filename,
+            email: emailToProcess.email,
+            status: 'pending'
+        }));
+        
+        // Start processing attachments
+        activeAttachmentDownloads = 0;
+        processAttachmentsBatch();
+    });
+}
+
+// Fetch email with retry mechanism
+function fetchEmailWithRetry(emailId, callback, retryCount = 0) {
+    const maxRetries = 3;
+    
+    if (retryCount >= maxRetries) {
+        callback({
+            success: false,
+            error: `Failed to fetch email after ${maxRetries} attempts`
+        });
+        return;
+    }
+    
+    fetch('/api/email/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            session_id: sessionId,
+            email_id: emailId,
+            delay: document.getElementById('delaySettings').value // Use configurable delay
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            callback(data);
+        } else {
+            console.error('Error fetching email details:', data.error);
+            
+            // If session expired, attempt reconnection
+            if (data.error && data.error.includes('session')) {
+                smartReconnect();
+                addToProcessingLog('Session expired. Reconnecting...', 'warning');
+                
+                // Retry after reconnection attempt
+                setTimeout(() => {
+                    fetchEmailWithRetry(emailId, callback, retryCount + 1);
+                }, 5000); // Give time for reconnection
+                return;
+            }
+            
+            // Retry with backoff
+            const retryDelay = calculateRetryDelay(retryCount);
+            addToProcessingLog(`Error fetching email: ${data.error}. Retrying in ${retryDelay/1000}s...`, 'warning');
+            
+            setTimeout(() => {
+                fetchEmailWithRetry(emailId, callback, retryCount + 1);
+            }, retryDelay);
+        }
+    })
+    .catch(error => {
+        console.error('Error fetching email:', error);
+        
+        // Retry with backoff
+        const retryDelay = calculateRetryDelay(retryCount);
+        addToProcessingLog(`Network error: ${error.message}. Retrying in ${retryDelay/1000}s...`, 'warning');
+        
+        setTimeout(() => {
+            fetchEmailWithRetry(emailId, callback, retryCount + 1);
+        }, retryDelay);
+    });
+}
+
+// Process attachments in batches to limit concurrent downloads
+function processAttachmentsBatch() {
+    // Check if all attachments have been processed
+    if (attachmentProcessingQueue.length === 0) {
+        // Remove email from queue and process next one
+        processingQueue.shift();
+        
+        // Add delay before processing next email
+        setTimeout(processNextEmail, DEFAULT_OPERATION_DELAY);
+        return;
+    }
+    
+    // Process attachments in batches
+    while (activeAttachmentDownloads < MAX_CONCURRENT_ATTACHMENTS && attachmentProcessingQueue.length > 0) {
+        const attachment = attachmentProcessingQueue.shift();
+        activeAttachmentDownloads++;
+        
+        // Process this attachment
+        processAttachment(attachment);
+    }
+}
+
+// Process a single attachment
+function processAttachment(attachment) {
+    addToProcessingLog(`Downloading attachment: ${attachment.filename}`);
+    
+    // Download the attachment
+    downloadAttachment(
+        attachment.emailId,
+        attachment.attachmentId,
+        attachment.filename,
+        0,
+        function(result) {
+            if (result.status === 'downloading' || result.status === 'retrying') {
+                // Update status during download
+                document.getElementById('currentOperation').textContent = result.message;
+                return;
+            }
+            
+            if (result.status === 'reconnecting') {
+                // Wait for reconnection before continuing
+                activeAttachmentDownloads--;
+                attachmentProcessingQueue.unshift(attachment); // Put back in queue
+                setTimeout(processAttachmentsBatch, 5000); // Wait for reconnection
+                return;
+            }
+            
+            if (result.success) {
+                // Attachment downloaded successfully
+                addToProcessingLog(`Downloaded: ${result.filename}`, 'success');
+                
+                // Process the attachment as an invoice
+                processAttachmentAsInvoice(result);
+            } else {
+                // Failed to download
+                addToProcessingLog(`Failed to download: ${attachment.filename} - ${result.error}`, 'error');
+                
+                // Continue processing
+                activeAttachmentDownloads--;
+                setTimeout(processAttachmentsBatch, DEFAULT_OPERATION_DELAY);
+            }
+        }
+    );
+}
+
+// Process an attachment as an invoice
+function processAttachmentAsInvoice(attachmentInfo) {
+    // Create a batch ID if we don't have one yet
+    if (!currentBatchId) {
+        currentBatchId = 'batch_' + Date.now();
+    }
+    
+    addToProcessingLog(`Processing file as invoice: ${attachmentInfo.filename}`);
+    
+    // Prepare data for processing request
+    const processingData = {
+        attachment_paths: [attachmentInfo.file_path],
+        from: [attachmentInfo.from],
+        email_ids: [attachmentInfo.emailId]
+    };
+    
+    // Send request to process the attachment
+    fetch('/api/email/process-attachments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(processingData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Check if this was the first successful processing
+            if (!currentBatchId && data.batch_id) {
+                currentBatchId = data.batch_id;
+            }
+            
+            const result = data.results[0];
+            if (result && result.success) {
+                addToProcessingLog(`Successfully processed invoice: ${attachmentInfo.filename}`, 'success');
+            } else {
+                const errorMsg = result ? result.error : 'Unknown error';
+                addToProcessingLog(`Error processing invoice: ${errorMsg}`, 'error');
+            }
+        } else {
+            addToProcessingLog(`Failed to process attachment: ${data.error}`, 'error');
+        }
+        
+        // Continue processing attachments
+        activeAttachmentDownloads--;
+        setTimeout(processAttachmentsBatch, DEFAULT_OPERATION_DELAY);
+    })
+    .catch(error => {
+        console.error('Error processing attachment as invoice:', error);
+        addToProcessingLog(`Error processing attachment: ${error.message}`, 'error');
+        
+        // Continue processing attachments
+        activeAttachmentDownloads--;
+        setTimeout(processAttachmentsBatch, DEFAULT_OPERATION_DELAY);
+    });
+}
+
+// Finish processing all emails and attachments
+function finishProcessing() {
+    addToProcessingLog('All processing completed!', 'success');
+    document.getElementById('currentOperation').textContent = 'Processing complete';
+    document.getElementById('cancelProcessingBtn').textContent = 'Close';
+    
+    if (currentBatchId) {
+        // Enable view results button
+        const viewResultsBtn = document.getElementById('viewResultsBtn');
+        viewResultsBtn.classList.remove('d-none');
+        viewResultsBtn.onclick = function() {
+            showBatchResults(currentBatchId);
+        };
+    }
+}
+
+// Cancel processing
+function cancelProcessing() {
+    // Clear processing queues
+    processingQueue = [];
+    attachmentProcessingQueue = [];
+    
+    // Reset UI
+    document.getElementById('processingPanel').classList.add('d-none');
+    document.getElementById('overallProgress').style.width = '0%';
+    document.getElementById('overallProgressText').textContent = '0/0';
+    document.getElementById('currentOperation').textContent = 'Waiting to start...';
+    document.getElementById('processingLogContent').innerHTML = '';
+}
+
+// Reset processing panel
+function resetProcessingPanel() {
+    document.getElementById('overallProgress').style.width = '0%';
+    document.getElementById('overallProgressText').textContent = '0/0';
+    document.getElementById('currentOperation').textContent = 'Preparing...';
+    document.getElementById('processingLogContent').innerHTML = '';
+    document.getElementById('cancelProcessingBtn').textContent = 'Cancel';
+    document.getElementById('viewResultsBtn').classList.add('d-none');
+}
+
+// Add a message to the processing log
+function addToProcessingLog(message, type = 'info') {
+    const logContent = document.getElementById('processingLogContent');
+    const timestamp = new Date().toLocaleTimeString();
+    
+    const logItem = document.createElement('div');
+    logItem.className = 'log-item mb-1';
+    
+    // Set color based on message type
+    let messageClass = '';
+    switch (type) {
+        case 'success':
+            messageClass = 'text-success';
+            break;
+        case 'error':
+            messageClass = 'text-danger';
+            break;
+        case 'warning':
+            messageClass = 'text-warning';
+            break;
+        default:
+            messageClass = 'text-secondary';
+    }
+    
+    logItem.innerHTML = `<small class="text-muted">[${timestamp}]</small> <span class="${messageClass}">${message}</span>`;
+    
+    logContent.appendChild(logItem);
+    
+    // Auto-scroll to bottom
+    const logContainer = document.getElementById('batchProcessingLog');
+    logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+// Update overall progress bar
+function updateOverallProgress(current, total) {
+    const progressBar = document.getElementById('overallProgress');
+    const progressText = document.getElementById('overallProgressText');
+    
+    const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+    progressBar.style.width = `${percentage}%`;
+    progressText.textContent = `${current}/${total}`;
+}
+
+// Show batch results modal
+function showBatchResults(batchId) {
+    fetch(`/api/pending-invoices?batch_id=${batchId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const modal = new bootstrap.Modal(document.getElementById('batchResultsModal'));
+                const contentElement = document.getElementById('batchResultsContent');
+                
+                // Clear existing content
+                contentElement.innerHTML = '';
+                
+                // Check if we have any invoices
+                if (data.pending_invoices && data.pending_invoices.length > 0) {
+                    // Create a table of results
+                    const table = document.createElement('table');
+                    table.className = 'table table-striped';
+                    
+                    // Add table header
+                    table.innerHTML = `
+                        <thead>
+                            <tr>
+                                <th>Invoice #</th>
+                                <th>Supplier</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTableBody"></tbody>
+                    `;
+                    
+                    contentElement.appendChild(table);
+                    
+                    const tableBody = document.getElementById('resultsTableBody');
+                    
+                    // Add each invoice to the table
+                    data.pending_invoices.forEach(invoice => {
+                        const row = document.createElement('tr');
+                        
+                        row.innerHTML = `
+                            <td>${invoice.invoice_number || '-'}</td>
+                            <td>${invoice.supplier_name || '-'}</td>
+                            <td>${invoice.invoice_date || '-'}</td>
+                            <td>${invoice.amount || '-'}</td>
+                            <td>
+                                <span class="badge ${invoice.validation_status === 'human_validated' ? 'bg-success' : 'bg-warning'}">
+                                    ${invoice.validation_status === 'human_validated' ? 'Validated' : 'Needs Review'}
+                                </span>
+                            </td>
+                        `;
+                        
+                        tableBody.appendChild(row);
+                    });
+                    
+                    // Add summary info
+                    const summary = document.createElement('div');
+                    summary.className = 'alert alert-info mt-3';
+                    summary.innerHTML = `
+                        <p class="mb-0"><strong>${data.pending_invoices.length}</strong> invoices were processed. 
+                        You can review them in the Pending Invoices section.</p>
+                    `;
+                    contentElement.appendChild(summary);
+                } else {
+                    // No invoices found
+                    const noResults = document.createElement('div');
+                    noResults.className = 'alert alert-warning';
+                    noResults.textContent = 'No processed invoices found for this batch.';
+                    contentElement.appendChild(noResults);
+                }
+                
+                modal.show();
+            } else {
+                addToProcessingLog(`Error fetching batch results: ${data.error}`, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching batch results:', error);
+            addToProcessingLog(`Error fetching batch results: ${error.message}`, 'error');
+        });
+}
+
+// Add a route on the server-side for keep-alive before using this
+// We'll add a POST endpoint at /api/email/keepalive to handle this
+function addKeepAliveRoute() {
+    // We'll need to add this to email_utils.py and expose it in app.py
+    // The endpoint would look like:
+    /*
+    @app.route('/api/email/keepalive', methods=['POST'])
+    def email_keepalive():
+        """Keep an email session alive by sending a NOOP command"""
+        try:
+            data = request.json
+            if not data:
+                return jsonify({'success': False, 'error': 'No data provided'}), 400
+                
+            session_id = data.get('session_id')
+            if not session_id:
+                return jsonify({'success': False, 'error': 'No session ID provided'}), 400
+                
+            if session_id not in email_connections:
+                return jsonify({
+                    'success': False, 
+                    'error': 'Email session not found or expired',
+                    'reconnect_required': True
+                }), 404
+                
+            mail = email_connections[session_id]['connection']
+            
+            # Send NOOP command to keep connection alive
+            response, data = mail.noop()
+            
+            if response == 'OK':
+                # Update the timestamp in the session data
+                email_connections[session_id]['last_activity'] = datetime.now()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Session refreshed successfully',
+                    'session_id': session_id
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to refresh session',
+                    'reconnect_required': True
+                }), 500
+        except Exception as e:
+            log.error(f"Error in keepalive: {str(e)}")
+            return jsonify({
+                'success': False,
+                'error': f'Error refreshing session: {str(e)}',
+                'reconnect_required': True
+            }), 500
+    */
+}
+</script>
+{% endblock %} 

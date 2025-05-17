@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sequential Batch Validation</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        .file-status-pending { color: #6c757d; }
+        .file-status-processing { color: #007bff; }
+        .file-status-processed { color: #28a745; }
+        .file-status-failed { color: #dc3545; }
+        .file-status-icon { margin-right: 10px; }
+        .progress { height: 20px; margin-bottom: 20px; }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            margin-left: 10px;
+            color: white;
+            font-weight: bold;
+        }
+        .status-badge-pending { background-color: #6c757d; }
+        .status-badge-processing { background-color: #007bff; }
+        .status-badge-processed { background-color: #28a745; }
+        .status-badge-failed { background-color: #dc3545; }
+        .current-file {
+            box-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+            border-left: 5px solid #007bff;
+        }
+        #processing-container {
+            display: none;
+        }
+        #validation-complete-container {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Sequential Batch Validation</h1>
+        <p class="lead">Processing files one by one for easy verification</p>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Batch Progress</h5>
+            </div>
+            <div class="card-body">
+                <div class="progress">
+                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <h5>Total Files: <span id="total-files">0</span></h5>
+                    </div>
+                    <div class="col-md-3">
+                        <h5>Pending: <span id="pending-files">0</span></h5>
+                    </div>
+                    <div class="col-md-3">
+                        <h5>Processed: <span id="processed-files">0</span></h5>
+                    </div>
+                    <div class="col-md-3">
+                        <h5>Failed: <span id="failed-files">0</span></h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="files-container" class="card mb-4">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="card-title mb-0">Files in Batch</h5>
+            </div>
+            <div class="card-body p-0">
+                <ul id="file-list" class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        Loading files...
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="start-container" class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">Start Processing</h5>
+            </div>
+            <div class="card-body">
+                <p>Your files have been uploaded and are ready for sequential processing. Click the button below to start processing the first file.</p>
+                <button id="start-processing" class="btn btn-success">
+                    <i class="bi bi-play-fill"></i> Start Processing
+                </button>
+            </div>
+        </div>
+
+        <div id="processing-container" class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Currently Processing</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Processing...</span>
+                    </div>
+                    <h4 class="mt-3">Processing file: <span id="current-filename">-</span></h4>
+                    <p>Please wait while the AI extracts data from this invoice...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="validation-complete-container" class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">Batch Processing Complete</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 48px;"></i>
+                    <h4 class="mt-3">All files have been processed!</h4>
+                    <p id="complete-summary">Successfully processed 0 of 0 files.</p>
+                    <div class="mt-4">
+                        <a href="/batch-upload" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> Upload Another Batch
+                        </a>
+                        <a href="/" class="btn btn-secondary">
+                            <i class="bi bi-house-door-fill"></i> Return to Dashboard
+                        </a>
+                        <button id="finalize-all" class="btn btn-success">
+                            <i class="bi bi-check-all"></i> Finalize All Validated Files
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get batch ID from URL
+            const batchId = window.location.pathname.split('/').pop();
+            let currentPendingId = null;
+            
+            // Reference to UI elements
+            const startContainer = document.getElementById('start-container');
+            const processingContainer = document.getElementById('processing-container');
+            const validationCompleteContainer = document.getElementById('validation-complete-container');
+            const startProcessingBtn = document.getElementById('start-processing');
+            const finalizeAllBtn = document.getElementById('finalize-all');
+            const currentFilename = document.getElementById('current-filename');
+            const progressBar = document.getElementById('progress-bar');
+            const totalFiles = document.getElementById('total-files');
+            const pendingFiles = document.getElementById('pending-files');
+            const processedFiles = document.getElementById('processed-files');
+            const failedFiles = document.getElementById('failed-files');
+            const fileList = document.getElementById('file-list');
+            const completeSummary = document.getElementById('complete-summary');
+            
+            // Load initial batch status
+            loadBatchStatus();
+            
+            // Start processing button click
+            startProcessingBtn.addEventListener('click', function() {
+                startContainer.style.display = 'none';
+                processingContainer.style.display = 'block';
+                processNextFile();
+            });
+            
+            // Finalize all button click
+            finalizeAllBtn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to finalize all validated files?')) {
+                    finalizeAllFiles();
+                }
+            });
+            
+            // Load batch status from server
+            function loadBatchStatus() {
+                fetch('/api/batch-queue/status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ batch_id: batchId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateStatusDisplay(data.stats, data.files);
+                    } else {
+                        console.error('Error loading batch status:', data.error);
+                        alert('Error loading batch status: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error loading batch status: ' + error);
+                });
+            }
+            
+            // Update status display
+            function updateStatusDisplay(stats, files) {
+                // Update progress bar
+                const percentage = stats.total > 0 ? Math.round(((stats.processed + stats.needs_validation + stats.validated) / stats.total) * 100) : 0;
+                progressBar.style.width = percentage + '%';
+                progressBar.setAttribute('aria-valuenow', percentage);
+                progressBar.textContent = percentage + '%';
+                
+                // Update statistics
+                totalFiles.textContent = stats.total;
+                pendingFiles.textContent = stats.pending;
+                processedFiles.textContent = (stats.needs_validation || 0) + (stats.validated || 0) + (stats.processed || 0);
+                failedFiles.textContent = stats.failed;
+                
+                // Show validate all button if we have any validated files
+                if ((stats.needs_validation || 0) + (stats.validated || 0) > 0) {
+                    finalizeAllBtn.style.display = 'inline-block';
+                    finalizeAllBtn.textContent = `Finalize All (${(stats.needs_validation || 0) + (stats.validated || 0)} files)`;
+                } else {
+                    finalizeAllBtn.style.display = 'none';
+                }
+                
+                // Update file list
+                if (files && files.length > 0) {
+                    let fileListHtml = '';
+                    
+                    files.forEach(file => {
+                        // Determine icon based on status
+                        let iconHtml = '';
+                        let statusClass = '';
+                        let statusBadgeClass = '';
+                        
+                        if (file.status === 'pending') {
+                            iconHtml = '<i class="bi bi-hourglass file-status-icon"></i>';
+                            statusClass = 'file-status-pending';
+                            statusBadgeClass = 'status-badge status-badge-pending';
+                        } else if (file.status === 'processing') {
+                            iconHtml = '<i class="bi bi-arrow-repeat file-status-icon"></i>';
+                            statusClass = 'file-status-processing';
+                            statusBadgeClass = 'status-badge status-badge-processing';
+                        } else if (file.status === 'needs_validation') {
+                            iconHtml = '<i class="bi bi-pencil-square file-status-icon"></i>';
+                            statusClass = 'text-warning';
+                            statusBadgeClass = 'status-badge bg-warning text-dark';
+                        } else if (file.status === 'validated') {
+                            iconHtml = '<i class="bi bi-check-circle file-status-icon"></i>';
+                            statusClass = 'text-success';
+                            statusBadgeClass = 'status-badge bg-success';
+                        } else if (file.status === 'processed') {
+                            iconHtml = '<i class="bi bi-check-circle file-status-icon"></i>';
+                            statusClass = 'file-status-processed';
+                            statusBadgeClass = 'status-badge status-badge-processed';
+                        } else if (file.status === 'failed') {
+                            iconHtml = '<i class="bi bi-x-circle file-status-icon"></i>';
+                            statusClass = 'file-status-failed';
+                            statusBadgeClass = 'status-badge status-badge-failed';
+                        }
+                        
+                        // Create action buttons based on status
+                        let actionButtons = '';
+                        
+                        if (file.status === 'needs_validation' && file.pending_id) {
+                            actionButtons = `
+                                <div>
+                                    <a href="/validate-invoice/${file.pending_id}?batch_id=${batchId}&sequential=true" 
+                                       class="btn btn-sm btn-outline-primary me-2">
+                                        <i class="bi bi-pencil"></i> ${file.is_viewed ? 'Continue Editing' : 'Validate'}
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-success quick-validate" data-pending-id="${file.pending_id}">
+                                        <i class="bi bi-check"></i> Quick Validate
+                                    </button>
+                                </div>`;
+                        } else if (file.status === 'validated' && file.pending_id) {
+                            actionButtons = `
+                                <a href="/validate-invoice/${file.pending_id}?batch_id=${batchId}&sequential=true" 
+                                   class="btn btn-sm btn-outline-success float-end">
+                                    <i class="bi bi-check-circle"></i> Review
+                                </a>`;
+                        } else if (file.status === 'failed') {
+                            actionButtons = `
+                                <button class="btn btn-sm btn-outline-secondary float-end retry-file" data-file-id="${file.id}">
+                                    <i class="bi bi-arrow-clockwise"></i> Retry
+                                </button>`;
+                        }
+                        
+                        fileListHtml += `
+                            <li class="list-group-item ${file.status === 'processing' ? 'current-file' : ''}">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="${statusClass}">${iconHtml}${file.filename}</span>
+                                        <span class="${statusBadgeClass}">${file.status_display || file.status}</span>
+                                    </div>
+                                    ${actionButtons}
+                                </div>
+                            </li>
+                        `;
+                    });
+                    
+                    fileList.innerHTML = fileListHtml;
+                    
+                    // Add event listeners to retry buttons
+                    document.querySelectorAll('.retry-file').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const fileId = this.dataset.fileId;
+                            retryFile(fileId);
+                        });
+                    });
+                    
+                    // Add event listeners to quick validate buttons
+                    document.querySelectorAll('.quick-validate').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const pendingId = this.dataset.pendingId;
+                            quickValidateFile(pendingId);
+                        });
+                    });
+                } else {
+                    fileList.innerHTML = '<li class="list-group-item">No files found in batch</li>';
+                }
+                
+                // Check if batch is complete
+                if (stats.pending === 0 && stats.processing === 0) {
+                    startContainer.style.display = 'none';
+                    processingContainer.style.display = 'none';
+                    validationCompleteContainer.style.display = 'block';
+                    completeSummary.textContent = `Successfully processed ${(stats.needs_validation || 0) + (stats.validated || 0) + (stats.processed || 0)} of ${stats.total} files.`;
+                }
+            }
+            
+            // Quick validate a file without going to the edit page
+            function quickValidateFile(pendingId) {
+                // Create processing overlay
+                const overlay = document.createElement('div');
+                overlay.style.position = 'fixed';
+                overlay.style.top = '0';
+                overlay.style.left = '0';
+                overlay.style.width = '100%';
+                overlay.style.height = '100%';
+                overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                overlay.style.display = 'flex';
+                overlay.style.justifyContent = 'center';
+                overlay.style.alignItems = 'center';
+                overlay.style.zIndex = '9999';
+
+                const card = document.createElement('div');
+                card.className = 'card p-4';
+                card.innerHTML = `
+                    <div class="text-center">
+                        <div class="spinner-border text-primary mb-3"></div>
+                        <h5>Quick validating...</h5>
+                        <p class="text-muted">Applying AI extracted data as-is</p>
+                    </div>
+                `;
+
+                overlay.appendChild(card);
+                document.body.appendChild(overlay);
+                
+                // First mark as validated
+                fetch(`/api/update-pending/${pendingId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_validated: 1 })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Then finalize
+                        return fetch(`/api/finalize-invoice/${pendingId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({})
+                        });
+                    } else {
+                        throw new Error('Failed to validate invoice');
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Remove overlay and refresh status
+                        document.body.removeChild(overlay);
+                        loadBatchStatus();
+                    } else {
+                        throw new Error('Failed to finalize invoice');
+                    }
+                })
+                .catch(error => {
+                    document.body.removeChild(overlay);
+                    console.error('Error:', error);
+                    alert('Error validating invoice: ' + error);
+                });
+            }
+            
+            // Process next file
+            function processNextFile() {
+                // Add a timeout variable
+                let processingTimeout;
+                
+                // Show more detailed processing UI
+                currentFilename.textContent = 'Processing...';
+                const processingStatus = document.createElement('div');
+                processingStatus.id = 'processing-status';
+                processingStatus.className = 'mt-3';
+                processingStatus.innerHTML = `
+                    <div class="progress mb-2">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                    </div>
+                    <p class="text-muted">This may take up to 30 seconds. If it takes longer, you can skip this file.</p>
+                    <button id="timeout-skip-btn" class="btn btn-sm btn-outline-warning mt-2">
+                        <i class="bi bi-skip-forward"></i> Skip this file (taking too long)
+                    </button>
+                `;
+                
+                // Find the processing container and append the status
+                const statusContainer = document.querySelector('#processing-container .text-center');
+                if (statusContainer) {
+                    statusContainer.appendChild(processingStatus);
+                    
+                    // Add event listener to the skip button
+                    document.getElementById('timeout-skip-btn').addEventListener('click', function() {
+                        clearTimeout(processingTimeout);
+                        // Mark as failed in the UI 
+                        loadBatchStatus();
+                        alert('Skipped file due to long processing time. You can try again later or continue with other files.');
+                        
+                        // Try the next file
+                        currentPendingId = null;
+                        processNextFile();
+                    });
+                }
+                
+                // Set a timeout in case the processing takes too long (30 seconds)
+                processingTimeout = setTimeout(function() {
+                    const skipBtn = document.getElementById('timeout-skip-btn');
+                    if (skipBtn) {
+                        skipBtn.classList.remove('btn-outline-warning');
+                        skipBtn.classList.add('btn-warning');
+                        skipBtn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Processing is taking longer than usual - Skip this file';
+                    }
+                }, 30000);
+                
+                fetch('/api/batch-queue/next', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        batch_id: batchId,
+                        pending_id: currentPendingId
+                    })
+                })
+                .then(response => {
+                    clearTimeout(processingTimeout);
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        if (data.complete) {
+                            // Batch processing complete
+                            processingContainer.style.display = 'none';
+                            validationCompleteContainer.style.display = 'block';
+                            completeSummary.textContent = `Successfully processed ${data.processed} of ${data.total} files.`;
+                            loadBatchStatus(); // Final refresh of status
+                        } else {
+                            // File processed successfully, redirect to validation page
+                            currentPendingId = data.pending_id;
+                            currentFilename.textContent = data.file_info.filename;
+                            
+                            // Refresh the status display
+                            loadBatchStatus();
+                            
+                            // Redirect to the validation page after a short delay
+                            setTimeout(() => {
+                                window.location.href = data.next_url;
+                            }, 1000);
+                        }
+                    } else {
+                        // Show detailed error message
+                        console.error('Error processing file:', data.error);
+                        const errorBox = document.createElement('div');
+                        errorBox.className = 'alert alert-danger mt-3';
+                        errorBox.innerHTML = `
+                            <h5><i class="bi bi-exclamation-triangle"></i> Error processing file</h5>
+                            <p>${data.error || 'Unknown error occurred'}</p>
+                            <div class="mt-2">
+                                <button id="retry-file-btn" class="btn btn-sm btn-primary me-2">Retry This File</button>
+                                <button id="skip-error-file-btn" class="btn btn-sm btn-secondary">Skip & Continue to Next</button>
+                            </div>
+                        `;
+                        
+                        // Remove any existing processing status
+                        const oldStatus = document.getElementById('processing-status');
+                        if (oldStatus) oldStatus.remove();
+                        
+                        // Add the error box
+                        statusContainer.appendChild(errorBox);
+                        
+                        // Add event listeners
+                        document.getElementById('retry-file-btn').addEventListener('click', function() {
+                            errorBox.remove();
+                            processNextFile();
+                        });
+                        
+                        document.getElementById('skip-error-file-btn').addEventListener('click', function() {
+                            // Mark as failed manually
+                            fetch('/api/batch-queue/mark-failed', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ 
+                                    batch_id: batchId, 
+                                    file_info: data.file_info 
+                                })
+                            })
+                            .then(() => {
+                                currentPendingId = null;
+                                errorBox.remove();
+                                processNextFile(); // Move to next file
+                            })
+                            .catch(e => {
+                                console.error('Error marking file as failed:', e);
+                                currentPendingId = null;
+                                errorBox.remove();
+                                processNextFile(); // Still try to move on
+                            });
+                        });
+                        
+                        loadBatchStatus(); // Refresh status to show failure
+                    }
+                })
+                .catch(error => {
+                    clearTimeout(processingTimeout);
+                    console.error('Error:', error);
+                    
+                    // Show error UI
+                    const errorBox = document.createElement('div');
+                    errorBox.className = 'alert alert-danger mt-3';
+                    errorBox.innerHTML = `
+                        <h5><i class="bi bi-exclamation-triangle"></i> Connection error</h5>
+                        <p>Unable to process file: ${error.message || 'Network or server error'}</p>
+                        <div class="mt-2">
+                            <button id="retry-network-btn" class="btn btn-sm btn-primary me-2">Retry</button>
+                            <button id="skip-network-file-btn" class="btn btn-sm btn-secondary">Skip & Continue</button>
+                        </div>
+                    `;
+                    
+                    // Remove any existing processing status
+                    const oldStatus = document.getElementById('processing-status');
+                    if (oldStatus) oldStatus.remove();
+                    
+                    // Add the error box to the container
+                    const statusContainer = document.querySelector('#processing-container .text-center');
+                    if (statusContainer) {
+                        statusContainer.appendChild(errorBox);
+                        
+                        // Add event listeners
+                        document.getElementById('retry-network-btn').addEventListener('click', function() {
+                            errorBox.remove();
+                            processNextFile();
+                        });
+                        
+                        document.getElementById('skip-network-file-btn').addEventListener('click', function() {
+                            currentPendingId = null;
+                            errorBox.remove();
+                            processNextFile(); // Move to next file
+                        });
+                    }
+                    
+                    loadBatchStatus();
+                });
+            }
+            
+            // Retry a failed file
+            function retryFile(fileId) {
+                fetch('/api/batch-queue/retry', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        batch_id: batchId,
+                        file_id: fileId
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        loadBatchStatus();
+                        alert('File queued for retry. Processing will start shortly.');
+                    } else {
+                        alert('Error retrying file: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error retrying file: ' + error);
+                });
+            }
+            
+            // Finalize all files
+            function finalizeAllFiles() {
+                finalizeAllBtn.disabled = true;
+                finalizeAllBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Finalizing...';
+                
+                fetch('/api/finalize-batch', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ batch_id: batchId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Successfully finalized all validated invoices: ' + data.message);
+                        loadBatchStatus();
+                        finalizeAllBtn.disabled = false;
+                        finalizeAllBtn.innerHTML = '<i class="bi bi-check-all"></i> Finalize All';
+                    } else {
+                        console.error('Error finalizing batch:', data.error);
+                        alert('Error finalizing batch: ' + data.error);
+                        finalizeAllBtn.disabled = false;
+                        finalizeAllBtn.innerHTML = '<i class="bi bi-check-all"></i> Finalize All';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error finalizing batch: ' + error);
+                    finalizeAllBtn.disabled = false;
+                    finalizeAllBtn.innerHTML = '<i class="bi bi-check-all"></i> Finalize All';
+                });
+            }
+        });
+    </script>
+</body>
+</html> 

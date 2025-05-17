@@ -1,0 +1,757 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Invoice - Enterprise Invoice Management{% endblock %}
+
+{% block head %}
+<style>
+    .drop-area {
+        border: 2px dashed #ccc;
+        border-radius: 8px;
+        padding: 60px 20px;
+        text-align: center;
+        background-color: #f8f9fa;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+    
+    .drop-area:hover {
+        background-color: #e9ecef;
+    }
+    
+    .drop-area.highlight {
+        background-color: #e2f3ff;
+        border-color: #0d6efd;
+    }
+    
+    .preview-container {
+        margin-top: 20px;
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    
+    .invoice-data-form {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+    }
+    
+    .progress-container {
+        margin-top: 20px;
+    }
+    
+    #upload-progress {
+        height: 25px;
+    }
+    
+    .batch-upload-link {
+        margin-bottom: 20px;
+        padding: 15px;
+        background-color: #e9f7ef;
+        border-radius: 8px;
+        border-left: 4px solid #28a745;
+    }
+
+    .validation-step {
+        display: none;
+    }
+
+    .validation-step.active {
+        display: block;
+    }
+
+    .validation-info {
+        margin-top: 15px;
+        padding: 10px 15px;
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-cloud-upload me-2"></i>Upload Invoice</h2>
+        <p class="text-muted">Upload PDF invoices for processing and organization</p>
+        <hr>
+    </div>
+</div>
+
+<!-- Batch Upload Link -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="batch-upload-link">
+            <h5><i class="bi bi-info-circle-fill me-2 text-success"></i>Need to upload multiple files?</h5>
+            <p class="mb-2">If you have multiple invoices to upload (up to 10 files), use our batch upload feature:</p>
+            <a href="/batch-upload" class="btn btn-success">
+                <i class="bi bi-cloud-upload-fill me-2"></i>Go to Batch Upload
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Upload Document</h5>
+            </div>
+            <div class="card-body">
+                <div id="upload-step" class="validation-step active">
+                    <div id="drop-area" class="drop-area">
+                        <i class="bi bi-cloud-arrow-up" style="font-size: 3rem;"></i>
+                        <h4 class="mt-3">Drag & Drop Files Here</h4>
+                        <p>or</p>
+                        <label for="fileInput" class="btn btn-primary">Select Files</label>
+                        <input type="file" id="fileInput" hidden accept=".pdf">
+                    </div>
+                </div>
+                
+                <div id="validation-step" class="validation-step">
+                    <div class="validation-info">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <span>Please review and verify the extracted information before finalizing the invoice.</span>
+                    </div>
+                    <div id="pdf-preview" class="mt-3 text-center">
+                        <div class="d-flex justify-content-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                        <p class="mt-2">Loading PDF preview...</p>
+                    </div>
+                </div>
+                
+                <div class="progress-container d-none">
+                    <p id="upload-status">Processing...</p>
+                    <div class="progress">
+                        <div id="upload-progress" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                </div>
+                
+                <div id="preview-container" class="preview-container d-none">
+                    <div class="alert alert-success" role="alert">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        <span id="success-message">File processed successfully!</span>
+                    </div>
+                    <h5>Uploaded File:</h5>
+                    <div id="file-preview" class="card">
+                        <div class="card-body">
+                            <p class="mb-1"><strong>Filename:</strong> <span id="file-name"></span></p>
+                            <p class="mb-0"><strong>Size:</strong> <span id="file-size"></span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Extracted Information</h5>
+            </div>
+            <div class="card-body">
+                <form id="invoice-data-form" class="invoice-data-form">
+                    <input type="hidden" id="pending-id" name="pending_id" value="">
+                    
+                    <div class="validation-status alert alert-info mb-3">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-info-circle-fill me-2"></i>
+                            <div>
+                                <strong>Human Validation Required</strong>
+                                <p class="mb-0">This data has been extracted by AI and needs your review. No information has been saved to the database yet.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="supplier-name" class="form-label">Supplier Name</label>
+                        <input type="text" class="form-control" id="supplier-name" name="supplier_name">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="company-name" class="form-label">Company Name (Recipient)</label>
+                        <input type="text" class="form-control" id="company-name" name="company_name">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="invoice-number" class="form-label">Invoice Number</label>
+                                <input type="text" class="form-control" id="invoice-number" name="invoice_number">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="invoice-date" class="form-label">Invoice Date</label>
+                                <input type="text" class="form-control" id="invoice-date" name="invoice_date">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="amount" class="form-label">Total Amount</label>
+                                <input type="text" class="form-control" id="amount" name="amount">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="vat-amount" class="form-label">VAT Amount</label>
+                                <input type="text" class="form-control" id="vat-amount" name="vat_amount">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="file-path" class="form-label">Original File Location</label>
+                        <input type="text" class="form-control" id="file-path" name="file_path" readonly>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" id="validate-btn" class="btn btn-success">
+                            <i class="bi bi-check-circle me-1"></i>Validate & Finalize
+                        </button>
+                        <button type="button" id="cancel-btn" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle me-1"></i>Cancel
+                        </button>
+                    </div>
+                </form>
+                
+                <div id="empty-state" class="text-center p-5">
+                    <i class="bi bi-file-earmark-text" style="font-size: 3rem;"></i>
+                    <p class="mt-3">Upload an invoice to see extracted information</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('fileInput');
+        const uploadProgress = document.getElementById('upload-progress');
+        const uploadStatus = document.getElementById('upload-status');
+        const progressContainer = document.querySelector('.progress-container');
+        const previewContainer = document.getElementById('preview-container');
+        const fileName = document.getElementById('file-name');
+        const fileSize = document.getElementById('file-size');
+        const successMessage = document.getElementById('success-message');
+        const emptyState = document.getElementById('empty-state');
+        const invoiceDataForm = document.getElementById('invoice-data-form');
+        const validateBtn = document.getElementById('validate-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+        const pendingIdInput = document.getElementById('pending-id');
+        const uploadStep = document.getElementById('upload-step');
+        const validationStep = document.getElementById('validation-step');
+        const pdfPreview = document.getElementById('pdf-preview');
+        
+        // Initially hide form and show empty state
+        invoiceDataForm.style.display = 'none';
+        emptyState.style.display = 'block';
+        
+        // Function to format file size
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' bytes';
+            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            else return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+        
+        // Handle drag and drop events
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false);
+        });
+        
+        function highlight() {
+            dropArea.classList.add('highlight');
+        }
+        
+        function unhighlight() {
+            dropArea.classList.remove('highlight');
+        }
+        
+        // Handle file drop
+        dropArea.addEventListener('drop', handleDrop, false);
+        
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            if (files.length > 0) {
+                handleFiles(files);
+            }
+        }
+        
+        // Handle file selection through button
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                handleFiles(this.files);
+            }
+        });
+        
+        function handleFiles(files) {
+            if (files.length > 1) {
+                alert('Please upload only one file at a time');
+                return;
+            }
+            
+            const file = files[0];
+            
+            // Check if file is PDF
+            if (file.type !== 'application/pdf') {
+                alert('Please upload a PDF file');
+                return;
+            }
+            
+            uploadFile(file);
+        }
+        
+        function uploadFile(file) {
+            // Show progress
+            progressContainer.classList.remove('d-none');
+            previewContainer.classList.add('d-none');
+            emptyState.style.display = 'none';
+            invoiceDataForm.style.display = 'none';
+            
+            // Update progress to show it's validating
+            uploadProgress.style.width = '25%';
+            uploadStatus.textContent = 'Validating file...';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            // Stage 1: Upload and validate only (add validation_only flag)
+            formData.append('validation_only', 'true');
+            
+            // Upload file for validation first
+            axios.post('/api/validate-upload', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                },
+                onUploadProgress: progressEvent => {
+                    const percentCompleted = Math.round((progressEvent.loaded * 75) / progressEvent.total);
+                    uploadProgress.style.width = `${25 + percentCompleted}%`;
+                }
+            })
+            .then(response => {
+                // Handle validation response
+                if (response.data.is_duplicate) {
+                    // Show duplicate warning
+                    progressContainer.classList.add('d-none');
+                    previewContainer.classList.remove('d-none');
+                    fileName.textContent = file.name;
+                    fileSize.textContent = formatFileSize(file.size);
+                    
+                    // Replace success alert with warning alert
+                    const successAlert = previewContainer.querySelector('.alert-success');
+                    if (successAlert) {
+                        const warningAlert = document.createElement('div');
+                        warningAlert.className = 'alert alert-warning';
+                        warningAlert.innerHTML = `
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <span>${response.data.error || 'This invoice already exists in the database.'}</span>
+                        `;
+                        successAlert.parentNode.replaceChild(warningAlert, successAlert);
+                    }
+                    
+                    // Show empty form with message
+                    emptyState.style.display = 'block';
+                    emptyState.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                            <h5>Duplicate Invoice Detected</h5>
+                            <p>${response.data.error || 'This invoice already exists in the database.'}</p>
+                            <p>Please try uploading a different invoice.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // If validation passed but AI extracting still needs to happen
+                if (response.data.extracted_data) {
+                    // Data was already extracted during validation, use it directly
+                    uploadProgress.style.width = '90%';
+                    uploadStatus.textContent = 'Processing data...';
+                    
+                    // Set the file info
+                    fileName.textContent = file.name;
+                    fileSize.textContent = formatFileSize(file.size);
+                    
+                    // Show validation UI right away
+                    uploadStep.classList.remove('active');
+                    validationStep.classList.add('active');
+                    
+                    // Fill form with pre-extracted data
+                    let dataToFill = response.data.extracted_data;
+                    console.log("Using pre-extracted data from validation:", dataToFill);
+                    
+                    // Create pending record and process the file
+                    const processingFormData = new FormData();
+                    processingFormData.append('temp_file_path', response.data.temp_file_path);
+                    processingFormData.append('original_filename', file.name);
+                    
+                    // Send to processing endpoint
+                    axios.post('/api/upload', processingFormData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        },
+                        onUploadProgress: progressEvent => {
+                            uploadProgress.style.width = '100%';
+                            uploadStatus.textContent = 'Ready for validation';
+                        }
+                    }).then(processResponse => {
+                        // Update progress to show it's done
+                        uploadProgress.style.width = '100%';
+                        uploadStatus.textContent = 'Ready for Validation';
+                        
+                        // Add a human validation notice at the top of the form
+                        const validationNotice = document.createElement('div');
+                        validationNotice.className = 'alert alert-primary mb-3';
+                        validationNotice.innerHTML = `
+                            <i class="bi bi-person-check-fill me-2"></i>
+                            <strong>Human Validation Required:</strong> Please review the AI-extracted data and make any necessary corrections before finalizing this invoice.
+                        `;
+                        
+                        // Add the validation notice at the top of the validation step
+                        const validationInfoElement = validationStep.querySelector('.validation-info');
+                        if (validationInfoElement) {
+                            validationStep.insertBefore(validationNotice, validationInfoElement);
+                        }
+                        
+                        // Get data from process response or use the one from validation
+                        let finalData = processResponse.data.extracted_data || dataToFill;
+                        let pendingId = processResponse.data.pending_id;
+                        
+                        // Fill the form with the extracted data
+                        fillFormWithData(finalData);
+                        pendingIdInput.value = pendingId;
+                        
+                        // Load PDF preview if we have a preview path
+                        if (processResponse.data.preview_path) {
+                            loadPdfPreview(processResponse.data.preview_path);
+                        } else if (processResponse.data.file_path) {
+                            loadPdfPreview(processResponse.data.file_path);
+                        }
+                        
+                        // Hide empty state and show form
+                        emptyState.style.display = 'none';
+                        invoiceDataForm.style.display = 'block';
+                        progressContainer.classList.add('d-none');
+                    }).catch(error => {
+                        progressContainer.classList.add('d-none');
+                        alert('Error processing file: ' + (error.response?.data?.error || error.message));
+                    });
+                    
+                    return; // Return here to avoid the rest of the promise chain
+                } else {
+                    // Stage 2: Process file (validation passed but no data extracted yet)
+                    uploadStatus.textContent = 'Processing with AI...';
+                    
+                    // If we have a temporary file path from validation, use it for processing
+                    const processingFormData = new FormData();
+                    processingFormData.append('temp_file_path', response.data.temp_file_path);
+                    processingFormData.append('original_filename', file.name);
+                    
+                    return axios.post('/api/upload', processingFormData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        },
+                        onUploadProgress: progressEvent => {
+                            uploadProgress.style.width = '90%';
+                        }
+                    });
+                }
+            })
+            .then(response => {
+                // Skip if this is undefined (meaning we had a duplicate in validation)
+                if (!response) return;
+                
+                // Update progress to show it's done
+                uploadProgress.style.width = '100%';
+                uploadStatus.textContent = 'Ready for Validation';
+                
+                // Add a human validation notice at the top of the form
+                const validationNotice = document.createElement('div');
+                validationNotice.className = 'alert alert-primary mb-3';
+                validationNotice.innerHTML = `
+                    <i class="bi bi-person-check-fill me-2"></i>
+                    <strong>Human Validation Required:</strong> Please review the AI-extracted data and make any necessary corrections before finalizing this invoice.
+                `;
+                
+                // Show preview and switch to validation step
+                uploadStep.classList.remove('active');
+                validationStep.classList.add('active');
+                
+                // Add the validation notice at the top of the validation step
+                const validationInfoElement = validationStep.querySelector('.validation-info');
+                if (validationInfoElement) {
+                    validationStep.insertBefore(validationNotice, validationInfoElement);
+                }
+                
+                // Set the file info
+                fileName.textContent = file.name;
+                fileSize.textContent = formatFileSize(file.size);
+                
+                // Debug logging
+                console.log("Server response:", response.data);
+                
+                // Fill form with extracted data
+                let dataToFill = response.data.extracted_data || response.data.data;
+                let pendingId = response.data.pending_id;
+                
+                if (!dataToFill && response.data.success === false) {
+                    // If data is missing, use empty data
+                    dataToFill = response.data.data || {
+                        'Lieferantename': '',
+                        'Rechnungsdatum': '',
+                        'Gesamtbetrag': '',
+                        'Empfängerfirma': '',
+                        'Rechnungsnummer': '',
+                        'Mehrwertsteuerbetrag': '',
+                        'Leistungsbeschreibung': '',
+                        'file_path': response.data.file_path || ''
+                    };
+                }
+                
+                // Check if we need to handle nested data structures
+                if (dataToFill && dataToFill.invoice_data) {
+                    dataToFill = dataToFill.invoice_data;
+                }
+                
+                console.log("Data to fill form:", dataToFill);
+                fillFormWithData(dataToFill);
+                pendingIdInput.value = pendingId;
+                
+                // Load PDF preview if we have a preview path
+                if (response.data.preview_path) {
+                    loadPdfPreview(response.data.preview_path);
+                } else if (response.data.file_path) {
+                    loadPdfPreview(response.data.file_path);
+                }
+                
+                // Hide empty state and show form
+                emptyState.style.display = 'none';
+                invoiceDataForm.style.display = 'block';
+                progressContainer.classList.add('d-none');
+            })
+            .catch(error => {
+                progressContainer.classList.add('d-none');
+                
+                if (error.response?.status === 409 && error.response?.data?.is_duplicate) {
+                    // Handle duplicate invoice detected during final validation
+                    const duplicateMessage = error.response.data.error || 'This invoice already exists in the database.';
+                    
+                    // Show error message
+                    previewContainer.classList.remove('d-none');
+                    fileName.textContent = file.name;
+                    fileSize.textContent = formatFileSize(file.size);
+                    
+                    // Replace success alert with warning alert
+                    const successAlert = previewContainer.querySelector('.alert-success');
+                    if (successAlert) {
+                        const warningAlert = document.createElement('div');
+                        warningAlert.className = 'alert alert-warning';
+                        warningAlert.innerHTML = `
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <span>${duplicateMessage}</span>
+                        `;
+                        successAlert.parentNode.replaceChild(warningAlert, successAlert);
+                    }
+                    
+                    // Show empty form with message
+                    emptyState.style.display = 'block';
+                    emptyState.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                            <h5>Duplicate Invoice Detected</h5>
+                            <p>${duplicateMessage}</p>
+                            <p>Please try uploading a different invoice.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Handle general errors
+                alert('Error processing file: ' + (error.response?.data?.error || error.message));
+            });
+        }
+        
+        function loadPdfPreview(path) {
+            // Create an iframe to show the PDF
+            pdfPreview.innerHTML = `
+                <iframe src="/view-pdf/${encodeURIComponent(path)}" width="100%" height="400" 
+                        style="border: 1px solid #dee2e6; border-radius: 4px;"></iframe>
+            `;
+        }
+        
+        function fillFormWithData(data) {
+            // Make sure data is valid
+            if (!data) {
+                console.error("No data provided to fillFormWithData");
+                return;
+            }
+            
+            console.log("Raw data to fill form:", data);
+            
+            // Create a helper function to get values safely from nested structures
+            function safeGet(obj, keys) {
+                if (!obj) return '';
+                
+                for (let i = 0; i < keys.length; i++) {
+                    const value = obj[keys[i]];
+                    if (value !== undefined && value !== null && value !== '') {
+                        return value;
+                    }
+                }
+                
+                // Check in extracted_data if it exists
+                if (obj.extracted_data) {
+                    for (let i = 0; i < keys.length; i++) {
+                        const value = obj.extracted_data[keys[i]];
+                        if (value !== undefined && value !== null && value !== '') {
+                            return value;
+                        }
+                    }
+                }
+                
+                return '';
+            }
+            
+            // Get values using our helper function
+            const supplier = safeGet(data, ['supplier_name', 'Lieferantename']);
+            const company = safeGet(data, ['company_name', 'Empfängerfirma']);
+            const invoiceNum = safeGet(data, ['invoice_number', 'Rechnungsnummer']);
+            const invoiceDate = safeGet(data, ['invoice_date', 'Rechnungsdatum']);
+            const amount = safeGet(data, ['amount', 'Gesamtbetrag']);
+            const vatAmount = safeGet(data, ['vat_amount', 'Mehrwertsteuerbetrag']);
+            const description = safeGet(data, ['description', 'Leistungsbeschreibung']);
+            const filePath = safeGet(data, ['file_path', 'original_path']);
+            
+            // Fill the form fields
+            document.getElementById('supplier-name').value = supplier;
+            document.getElementById('company-name').value = company;
+            document.getElementById('invoice-number').value = invoiceNum;
+            document.getElementById('invoice-date').value = invoiceDate;
+            document.getElementById('amount').value = amount;
+            document.getElementById('vat-amount').value = vatAmount;
+            document.getElementById('description').value = description;
+            document.getElementById('file-path').value = filePath;
+            
+            // Log what we filled
+            console.log("Form values after filling:");
+            console.log("Supplier:", document.getElementById('supplier-name').value);
+            console.log("Company:", document.getElementById('company-name').value);
+            console.log("Invoice #:", document.getElementById('invoice-number').value);
+            console.log("Date:", document.getElementById('invoice-date').value);
+            console.log("Amount:", document.getElementById('amount').value);
+            console.log("VAT:", document.getElementById('vat-amount').value);
+            console.log("Description:", document.getElementById('description').value);
+        }
+        
+        // Handle cancel button
+        cancelBtn.addEventListener('click', function() {
+            if(confirm('Cancel this upload? Any changes will be lost.')) {
+                // Reset form and go back to upload step
+                uploadStep.classList.add('active');
+                validationStep.classList.remove('active');
+                invoiceDataForm.style.display = 'none';
+                emptyState.style.display = 'block';
+                invoiceDataForm.reset();
+            }
+        });
+        
+        // Handle form submission
+        invoiceDataForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                supplier_name: document.getElementById('supplier-name').value,
+                company_name: document.getElementById('company-name').value,
+                invoice_number: document.getElementById('invoice-number').value,
+                invoice_date: document.getElementById('invoice-date').value,
+                amount: document.getElementById('amount').value,
+                vat_amount: document.getElementById('vat-amount').value,
+                description: document.getElementById('description').value,
+                organize_file: true
+            };
+            
+            const pendingId = pendingIdInput.value;
+            if (!pendingId) {
+                showToast('Missing pending invoice ID', 'error');
+                return;
+            }
+            
+            // Disable form elements during submission
+            const formElements = invoiceDataForm.elements;
+            for (let i = 0; i < formElements.length; i++) {
+                formElements[i].disabled = true;
+            }
+            
+            validateBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+
+            // First update the pending invoice with validated data
+            axios.put(`/api/pending/${pendingId}`, formData)
+                .then(response => {
+                    if (!response.data.success) {
+                        throw new Error(response.data.error || 'Failed to update invoice');
+                    }
+                    
+                    // Then validate and finalize the invoice
+                    return axios.post(`/api/validate/${pendingId}`, formData);
+                })
+                .then(response => {
+                    if (!response.data.success) {
+                        throw new Error(response.data.error || 'Failed to validate invoice');
+                    }
+                    
+                    // Show success message
+                    showToast('Invoice validated and saved successfully!', 'success');
+                    
+                    // Reset form and go back to upload step
+                    uploadStep.classList.add('active');
+                    validationStep.classList.remove('active');
+                    invoiceDataForm.style.display = 'none';
+                    emptyState.style.display = 'block';
+                    invoiceDataForm.reset();
+                })
+                .catch(error => {
+                    const errorMessage = error.response?.data?.error || error.message;
+                    showToast(`Error: ${errorMessage}`, 'error');
+                    console.error('Validation error:', error);
+                })
+                .finally(() => {
+                    // Re-enable form elements
+                    for (let i = 0; i < formElements.length; i++) {
+                        formElements[i].disabled = false;
+                    }
+                    validateBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Validate & Finalize';
+                });
+        });
+    });
+</script>
+{% endblock %} 

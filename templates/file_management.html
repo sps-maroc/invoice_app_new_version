@@ -1,0 +1,464 @@
+{% extends "base.html" %}
+
+{% block title %}File Management{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>File Management</h2>
+        <div class="d-flex gap-2">
+            <div class="input-group">
+                <span class="input-group-text">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input type="text" class="form-control search-input" id="searchInput" placeholder="Search files...">
+            </div>
+            <button class="btn btn-outline-secondary" type="button" onclick="refreshFiles()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover file-table mb-0">
+                <thead>
+                    <tr>
+                        <th>File Name</th>
+                        <th>Invoice Number</th>
+                        <th>Company</th>
+                        <th>Supplier</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="fileTableBody">
+                    <!-- Files will be loaded here dynamically -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal fade preview-modal" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Preview Invoice</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="pdfLoadingError" class="alert alert-danger d-none">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Unable to load the PDF file. The file may have been moved or deleted.
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="refreshFiles()">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Refresh File List
+                        </button>
+                    </div>
+                </div>
+                <iframe id="pdfPreview" style="width: 100%; height: 600px;" onload="checkPdfLoaded(this)" onerror="showPdfError()"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade edit-modal" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Invoice Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editForm">
+                    <input type="hidden" id="editFileId">
+                    <div class="mb-3">
+                        <label for="editInvoiceNumber" class="form-label">Invoice Number</label>
+                        <input type="text" class="form-control" id="editInvoiceNumber">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editCompany" class="form-label">Company</label>
+                        <input type="text" class="form-control" id="editCompany">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editSupplier" class="form-label">Supplier</label>
+                        <input type="text" class="form-control" id="editSupplier">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editDate" class="form-label">Date</label>
+                        <input type="date" class="form-control" id="editDate">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editAmount" class="form-label">Amount</label>
+                        <div class="input-group">
+                            <span class="input-group-text">€</span>
+                            <input type="number" step="0.01" class="form-control" id="editAmount">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveEditBtn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="deleteConfirmBody">
+                Are you sure you want to delete this invoice? This will remove it from both the database and the file system.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Load files on page load
+document.addEventListener('DOMContentLoaded', function() {
+    refreshFiles();
+    
+    // Add event listeners for modal buttons
+    document.getElementById('saveEditBtn').addEventListener('click', saveEdit);
+    document.getElementById('confirmDeleteBtn').addEventListener('click', executeDelete);
+});
+
+// Global variable to store current delete ID
+let currentDeleteId = null;
+
+// Search functionality
+document.getElementById('searchInput').addEventListener('input', function(e) {
+    const searchText = e.target.value.toLowerCase();
+    const rows = document.getElementById('fileTableBody').getElementsByTagName('tr');
+    
+    for (let row of rows) {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(searchText) ? '' : 'none';
+    }
+});
+
+function refreshFiles() {
+    fetch('/api/files')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to load files');
+            }
+            
+            const tbody = document.getElementById('fileTableBody');
+            tbody.innerHTML = '';
+            
+            if (!data.files || data.files.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            <i class="bi bi-file-earmark-x fs-1 d-block mb-2 text-muted"></i>
+                            No files found. Upload some invoices to get started.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            data.files.forEach(file => {
+                // Get the filename from the file_path
+                const filename = file.file_path ? file.file_path.split(/[\/\\]/).pop() : 'Unknown';
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="text-truncate" style="max-width: 200px;" title="${file.file_path}">
+                        ${filename}
+                    </td>
+                    <td>${file.invoice_number || 'Unknown'}</td>
+                    <td>${file.company_name || 'Unknown'}</td>
+                    <td>${file.supplier_name || 'Unknown'}</td>
+                    <td>${file.invoice_date || 'Unknown'}</td>
+                    <td>${formatCurrency(file.amount)}</td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-primary" onclick="previewFile('${file.file_path.replace(/\\/g, "/")}')" title="View Document">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <button class="btn btn-secondary" onclick="editInvoiceDetails(${file.id})" title="Edit Details">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-danger" onclick="confirmDeleteFile(${file.id}, '${filename}')" title="Delete">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading files:', error);
+            document.getElementById('fileTableBody').innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-4">
+                        <i class="bi bi-exclamation-triangle fs-1 d-block mb-2 text-danger"></i>
+                        Error loading files: ${error.message}
+                        <div class="mt-3">
+                            <button onclick="refreshFiles()" class="btn btn-sm btn-primary">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Try Again
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            showToast('Error loading files: ' + error.message, 'error');
+        });
+}
+
+function previewFile(filePath) {
+    if (!filePath) {
+        showToast('File path not available for preview', 'error');
+        return;
+    }
+    
+    // Clear any previous content
+    document.getElementById('pdfPreview').src = '';
+    
+    // First show the modal, then set the iframe source
+    const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+    previewModal.show();
+    
+    // Remove iframe src and reload it after a short delay to avoid loading issues
+    setTimeout(() => {
+        // Handle file path encoding properly
+        // For Windows paths that start with drive letters
+        if (filePath.match(/^[A-Z]:\\/i)) {
+            // For absolute Windows paths
+            document.getElementById('pdfPreview').src = `/view-pdf/${encodeURIComponent(filePath)}`;
+        } else {
+            // For relative paths or paths already in the correct format
+            document.getElementById('pdfPreview').src = `/view-pdf/${encodeURIComponent(filePath)}`;
+        }
+    }, 300);
+}
+
+function editInvoiceDetails(fileId) {
+    // Get invoice details for editing
+    fetch(`/api/invoices?id=${fileId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to load invoice details');
+            }
+            
+            const invoice = data.invoices && data.invoices.length > 0 ? data.invoices[0] : null;
+            
+            if (!invoice) {
+                throw new Error('Invoice not found');
+            }
+            
+            // Populate the form and enable fields for editing
+            document.getElementById('editFileId').value = fileId;
+            document.getElementById('editInvoiceNumber').value = invoice.invoice_number || '';
+            document.getElementById('editCompany').value = invoice.company_name || '';
+            document.getElementById('editSupplier').value = invoice.supplier_name || '';
+            
+            // Format date for input field (YYYY-MM-DD)
+            if (invoice.invoice_date) {
+                try {
+                    // Try to parse and format the date
+                    const parts = invoice.invoice_date.split('.');
+                    if (parts.length === 3) {
+                        // Convert from DD.MM.YYYY to YYYY-MM-DD
+                        document.getElementById('editDate').value = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                    } else {
+                        document.getElementById('editDate').value = invoice.invoice_date;
+                    }
+                } catch (e) {
+                    document.getElementById('editDate').value = invoice.invoice_date;
+                }
+            }
+            
+            document.getElementById('editAmount').value = parseFloat(invoice.amount) || '';
+            
+            // Enable all form fields for editing
+            document.getElementById('editInvoiceNumber').disabled = false;
+            document.getElementById('editCompany').disabled = false;
+            document.getElementById('editSupplier').disabled = false;
+            document.getElementById('editDate').disabled = false;
+            document.getElementById('editAmount').disabled = false;
+            
+            // Show the save button
+            document.getElementById('saveEditBtn').style.display = 'block';
+            
+            // Update modal title
+            document.querySelector('#editModal .modal-title').textContent = 'Edit Invoice Details';
+            
+            // Show the modal
+            new bootstrap.Modal(document.getElementById('editModal')).show();
+        })
+        .catch(error => {
+            console.error('Error fetching invoice details:', error);
+            showToast('Error loading invoice details: ' + error.message, 'error');
+        });
+}
+
+function saveEdit() {
+    const fileId = document.getElementById('editFileId').value;
+    const data = {
+        invoice_number: document.getElementById('editInvoiceNumber').value,
+        company_name: document.getElementById('editCompany').value,
+        supplier_name: document.getElementById('editSupplier').value,
+        invoice_date: document.getElementById('editDate').value,
+        amount: parseFloat(document.getElementById('editAmount').value) || null
+    };
+    
+    // Show saving indicator
+    const saveBtn = document.getElementById('saveEditBtn');
+    const originalText = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+    
+    // Send update request
+    fetch(`/api/invoice/${fileId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(result => {
+        if (result.success) {
+            bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+            refreshFiles();
+            showToast('Invoice details updated successfully', 'success');
+        } else {
+            throw new Error(result.error || 'Unknown error');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving changes:', error);
+        showToast('Error saving changes: ' + error.message, 'error');
+    })
+    .finally(() => {
+        // Reset button state
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalText;
+    });
+}
+
+function confirmDeleteFile(fileId, filename) {
+    // Store the file ID for deletion
+    currentDeleteId = fileId;
+    
+    // Extract just the filename part, not the full path
+    const simplifiedName = filename.split(/[\/\\]/).pop();
+    
+    // Update confirmation message
+    document.getElementById('deleteConfirmBody').innerHTML = `
+        Are you sure you want to delete invoice <strong>${simplifiedName}</strong>?<br>
+        This will remove it from both the database and the file system.
+    `;
+    
+    // Show confirmation modal
+    new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
+}
+
+function executeDelete() {
+    if (!currentDeleteId) {
+        showToast('No file selected for deletion', 'error');
+        return;
+    }
+    
+    // Show deleting indicator
+    const deleteBtn = document.getElementById('confirmDeleteBtn');
+    const originalText = deleteBtn.innerHTML;
+    deleteBtn.disabled = true;
+    deleteBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Deleting...';
+    
+    // Send delete request
+    fetch(`/api/invoice/${currentDeleteId}`, {
+        method: 'DELETE'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(result => {
+        if (result.success) {
+            bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal')).hide();
+            refreshFiles();
+            showToast('Invoice deleted successfully', 'success');
+        } else {
+            throw new Error(result.error || 'Unknown error');
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting file:', error);
+        showToast('Error deleting file: ' + error.message, 'error');
+    })
+    .finally(() => {
+        // Reset button state and clear current delete ID
+        deleteBtn.disabled = false;
+        deleteBtn.innerHTML = originalText;
+        currentDeleteId = null;
+    });
+}
+
+// Check if PDF loaded successfully
+function checkPdfLoaded(iframe) {
+    // Hide any previous error
+    document.getElementById('pdfLoadingError').classList.add('d-none');
+    
+    // We need to wait a bit to make sure the iframe has loaded its content
+    setTimeout(() => {
+        try {
+            // Try to access content - if there's an error, the PDF didn't load
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            
+            // Check if we got JSON error response
+            if (doc.body.textContent.includes('PDF file not found') || 
+                doc.body.textContent.includes('Error viewing file')) {
+                showPdfError();
+            }
+        } catch (e) {
+            // If we can't access the document (cross-origin), that's ok
+            // This typically means the PDF loaded successfully
+        }
+    }, 1000);
+}
+
+function showPdfError() {
+    document.getElementById('pdfPreview').classList.add('d-none');
+    document.getElementById('pdfLoadingError').classList.remove('d-none');
+}
+</script>
+{% endblock %} 
