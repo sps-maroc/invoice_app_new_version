@@ -166,6 +166,8 @@ class InvoiceDatabase:
                 supplier_id,
                 company_id,
                 datetime.now().isoformat()
+
+
             ))
             self.conn.commit()
             self.logger.info(f"Invoice {invoice_data.get('Rechnungsnummer', 'Unknown')} successfully saved to database")

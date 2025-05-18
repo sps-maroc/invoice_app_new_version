@@ -713,9 +713,14 @@ def validate_invoice(pending_id):
             cursor.execute('INSERT INTO companies (name) VALUES (?)', (company_name,))
             company_id = cursor.lastrowid
         
-        # Format the amount and VAT as floats if they're not already
-        amount_str = clean_amount(data.get('amount_original') or pending['amount_original'])
-        vat_amount_str = clean_amount(data.get('vat_amount_original') or pending['vat_amount_original'])
+        # Store raw extracted values only, no normalization or conversion
+        amount_extracted_raw = data.get('amount_original') or pending['amount_original']
+        vat_amount_extracted_raw = data.get('vat_amount_original') or pending['vat_amount_original']
+        amount_str = amount_extracted_raw
+        vat_amount_str = vat_amount_extracted_raw
+        # Debug logging
+        log.info(f"[VALIDATE-RAW] amount_extracted_raw: '{amount_extracted_raw}' (stored as amount_original)")
+        log.info(f"[VALIDATE-RAW] vat_amount_extracted_raw: '{vat_amount_extracted_raw}' (stored as vat_amount_original)")
         
         # Get file paths
         file_path = pending['file_path']
@@ -751,8 +756,8 @@ def validate_invoice(pending_id):
             None,  # raw_text
             datetime.now().isoformat(),
             'Validated by human',
-            data.get('amount_original') or pending['amount_original'],
-            data.get('vat_amount_original') or pending['vat_amount_original']
+            amount_extracted_raw,
+            vat_amount_extracted_raw
         ))
         
         # Get the ID of the new invoice
@@ -2985,8 +2990,11 @@ def finalize_batch():
                 # Parse amounts
                 amount_extracted_raw = file_data.get('amount_original') or pending['amount_original']
                 vat_amount_extracted_raw = file_data.get('vat_amount_original') or pending['vat_amount_original']
-                amount_original = clean_amount(amount_extracted_raw)
-                vat_amount_original = clean_amount(vat_amount_extracted_raw)
+                amount_original = amount_extracted_raw
+                vat_amount_original = vat_amount_extracted_raw
+                # Debug logging
+                log.info(f"[BATCH FINALIZE-RAW] amount_extracted_raw: '{amount_extracted_raw}' (stored as amount_original)")
+                log.info(f"[BATCH FINALIZE-RAW] vat_amount_extracted_raw: '{vat_amount_extracted_raw}' (stored as vat_amount_original)")
                 
                 # Get the original file path
                 file_path = pending['file_path']

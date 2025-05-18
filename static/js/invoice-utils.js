@@ -127,32 +127,18 @@ function fillInvoiceForm(form, data, fieldMap = {}) {
  */
 function validateInvoiceData(data) {
     const result = { ...data };
-    
-    // Format the invoice date if needed
+    // Only format the invoice date if needed, do not touch amount fields
     if (result.invoice_date) {
-        // Try to parse and normalize the date
         try {
             const date = new Date(result.invoice_date);
             if (!isNaN(date.getTime())) {
-                // Convert to YYYY-MM-DD format
                 result.invoice_date = date.toISOString().split('T')[0];
             }
         } catch (e) {
             console.warn("Could not parse date:", result.invoice_date);
         }
     }
-    
-    // Format amount and VAT fields
-    if (result.amount_original && typeof result.amount_original === 'string') {
-        result.amount_original = parseFloat(result.amount_original.replace(/[^\d.,]/g, '')
-            .replace(/,/g, '.')) || 0;
-    }
-    
-    if (result.vat_amount_original && typeof result.vat_amount_original === 'string') {
-        result.vat_amount_original = parseFloat(result.vat_amount_original.replace(/[^\d.,]/g, '')
-            .replace(/,/g, '.')) || 0;
-    }
-    
+    // Do NOT clean or parse amount_original or vat_amount_original
     return result;
 }
 
