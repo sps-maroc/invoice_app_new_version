@@ -451,7 +451,7 @@
                                             <label class="form-label">Amount</label>
                                             <div class="input-group">
                                                 <span class="input-group-text">€</span>
-                                                <input type="number" name="amount" step="0.01" class="form-control" value="${invoice.data?.amount || ''}">
+                                                <input type="number" name="amount_original" step="0.01" class="form-control" value="${invoice.data?.amount_original || ''}">
                                             </div>
                                         </div>
                                         
@@ -459,7 +459,7 @@
                                             <label class="form-label">VAT Amount</label>
                                             <div class="input-group">
                                                 <span class="input-group-text">€</span>
-                                                <input type="number" name="vat_amount" step="0.01" class="form-control" value="${invoice.data?.vat_amount || ''}">
+                                                <input type="number" name="vat_amount_original" step="0.01" class="form-control" value="${invoice.data?.vat_amount_original || ''}">
                                             </div>
                                         </div>
                                     </div>

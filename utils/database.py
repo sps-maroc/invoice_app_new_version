@@ -96,9 +96,7 @@ def initialize_shadow_table(db_path):
         invoice_date TEXT,
         due_date TEXT,
         normalized_date TEXT,
-        amount REAL,
         amount_original TEXT,
-        vat_amount REAL,
         vat_amount_original TEXT,
         description TEXT,
         supplier_name TEXT,
@@ -136,8 +134,8 @@ def initialize_tables(db_path):
         invoice_date TEXT,
         due_date TEXT,
         normalized_date TEXT,
-        amount REAL,
-        vat_amount REAL,
+        amount_original TEXT,
+        vat_amount_original TEXT,
         description TEXT,
         supplier_id INTEGER,
         company_id INTEGER,
@@ -178,9 +176,7 @@ def initialize_tables(db_path):
         invoice_date TEXT,
         due_date TEXT,
         normalized_date TEXT,
-        amount REAL,
         amount_original TEXT,
-        vat_amount REAL,
         vat_amount_original TEXT,
         description TEXT,
         supplier_name TEXT,
@@ -305,8 +301,8 @@ def save_to_pending(invoice_data, batch_id=None, source_info=None, db_path=None)
         'invoice_number': invoice_data.get('Rechnungsnummer', invoice_data.get('invoice_number', '')),
         'invoice_date': invoice_data.get('Rechnungsdatum', invoice_data.get('invoice_date', '')),
         'due_date': invoice_data.get('Fälligkeitsdatum', invoice_data.get('due_date', '')),
-        'amount': invoice_data.get('Gesamtbetrag', invoice_data.get('amount', '')),
-        'vat_amount': invoice_data.get('Mehrwertsteuerbetrag', invoice_data.get('vat_amount', '')),
+        'amount_original': invoice_data.get('Gesamtbetrag', invoice_data.get('amount_original', invoice_data.get('amount', ''))),
+        'vat_amount_original': invoice_data.get('Mehrwertsteuerbetrag', invoice_data.get('vat_amount_original', invoice_data.get('vat_amount', ''))),
         'description': invoice_data.get('Leistungsbeschreibung', invoice_data.get('description', '')),
         'supplier_name': invoice_data.get('Lieferantename', invoice_data.get('supplier_name', '')),
         'company_name': invoice_data.get('Empfängerfirma', invoice_data.get('company_name', '')),
@@ -344,8 +340,8 @@ def save_to_pending(invoice_data, batch_id=None, source_info=None, db_path=None)
         # Create the base query and parameters
         fields = [
             "batch_id", "file_path", "original_path", "preview_path", 
-            "invoice_number", "invoice_date", "due_date", "amount", "amount_original", 
-            "vat_amount", "vat_amount_original", "description", "supplier_name", "company_name",
+            "invoice_number", "invoice_date", "due_date", "amount_original", 
+            "vat_amount_original", "description", "supplier_name", "company_name",
             "needs_manual_input", "validation_status", "validation_notes", "source", "source_info",
             "extracted_data", "created_at", "updated_at"
         ]
@@ -358,10 +354,8 @@ def save_to_pending(invoice_data, batch_id=None, source_info=None, db_path=None)
             safe_data['invoice_number'],
             safe_data['invoice_date'],
             safe_data['due_date'],
-            safe_data['amount'],
-            safe_data['amount'],  # Store original amount string
-            safe_data['vat_amount'],
-            safe_data['vat_amount'],  # Store original VAT amount string
+            safe_data['amount_original'],
+            safe_data['vat_amount_original'],
             safe_data['description'],
             safe_data['supplier_name'],
             safe_data['company_name'],
@@ -444,8 +438,8 @@ def update_pending_invoice(invoice_id, data, db_path):
             
         # Basic fields to update
         fields_to_update = [
-            'invoice_number', 'invoice_date', 'due_date', 'amount', 
-            'vat_amount', 'description', 'supplier_name', 'company_name',
+            'invoice_number', 'invoice_date', 'due_date', 'amount_original', 
+            'vat_amount_original', 'description', 'supplier_name', 'company_name',
             'validation_status', 'validation_notes', 'needs_manual_input'
         ]
         

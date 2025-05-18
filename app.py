@@ -384,11 +384,11 @@ def get_dashboard_stats():
         total_companies = cursor.fetchone()['total']
         
         # Get total amount of all invoices
-        cursor = conn.execute('SELECT SUM(amount) AS total_amount FROM invoices')
+        cursor = conn.execute('SELECT SUM(CAST(REPLACE(REPLACE(amount_original, ",", "."), "€", "") AS REAL)) AS total_amount FROM invoices')
         total_amount = cursor.fetchone()['total_amount'] or 0
         
         # Get average amount
-        cursor = conn.execute('SELECT AVG(amount) AS avg_amount FROM invoices')
+        cursor = conn.execute('SELECT AVG(CAST(REPLACE(REPLACE(amount_original, ",", "."), "€", "") AS REAL)) AS avg_amount FROM invoices')
         average_amount = cursor.fetchone()['avg_amount'] or 0
         
         # Get count of invoices needing manual input
@@ -430,7 +430,7 @@ def get_files():
             SELECT i.id, i.file_path, i.original_path, 
                    s.name AS supplier_name,
                    i.invoice_number, i.invoice_date, 
-                   i.amount, 
+                   i.amount_original, i.vat_amount_original,
                    c.name AS company_name, 
                    i.description, i.processed_at AS created_at, i.processed_at AS updated_at
             FROM invoices i
@@ -495,7 +495,7 @@ def get_invoices():
         if status == 'pending':
             query = '''
                 SELECT id, file_path, original_path, supplier_name, invoice_number, invoice_date, 
-                      amount, company_name, description, created_at, updated_at, needs_manual_input
+                      amount_original, vat_amount_original, company_name, description, created_at, updated_at, needs_manual_input
                 FROM pending_invoices 
                 WHERE 1=1
             '''
@@ -526,7 +526,7 @@ def get_invoices():
                 SELECT i.id, i.file_path, i.original_path, 
                        s.name AS supplier_name,
                        i.invoice_number, i.invoice_date, 
-                       i.amount, 
+                       i.amount_original, i.vat_amount_original,
                        c.name AS company_name, 
                        i.description, i.processed_at AS created_at, i.processed_at AS updated_at
                 FROM invoices i
@@ -578,7 +578,7 @@ def get_pending_invoices():
         # Build query
         query = '''
             SELECT id, batch_id, file_path, preview_path, supplier_name, invoice_number, 
-                   invoice_date, amount, company_name, description, needs_manual_input,
+                   invoice_date, amount_original, vat_amount_original, company_name, description, needs_manual_input,
                    validation_status, created_at, updated_at
             FROM pending_invoices 
             WHERE 1=1
@@ -657,8 +657,8 @@ def validate_invoice(pending_id):
             'company_name': data.get('company_name', ''),
             'invoice_number': data.get('invoice_number', ''),
             'invoice_date': data.get('invoice_date', ''),
-            'amount': data.get('amount', ''),
-            'vat_amount': data.get('vat_amount', ''),
+            'amount_original': data.get('amount_original', ''),
+            'vat_amount_original': data.get('vat_amount_original', ''),
             'description': data.get('description', ''),
             'is_validated': True,
             'validated_at': datetime.now().isoformat(),
@@ -714,21 +714,8 @@ def validate_invoice(pending_id):
             company_id = cursor.lastrowid
         
         # Format the amount and VAT as floats if they're not already
-        amount_str = data.get('amount') or pending['amount']
-        amount = 0.0
-        if amount_str:
-            try:
-                amount = normalize_amount(amount_str)
-            except:
-                amount = 0.0
-                
-        vat_amount_str = data.get('vat_amount') or pending['vat_amount']
-        vat_amount = 0.0
-        if vat_amount_str:
-            try:
-                vat_amount = normalize_amount(vat_amount_str)
-            except:
-                vat_amount = 0.0
+        amount_str = clean_amount(data.get('amount_original') or pending['amount_original'])
+        vat_amount_str = clean_amount(data.get('vat_amount_original') or pending['vat_amount_original'])
         
         # Get file paths
         file_path = pending['file_path']
@@ -742,24 +729,30 @@ def validate_invoice(pending_id):
         # Now insert into invoices table
         cursor.execute('''
             INSERT INTO invoices (
-                file_path, original_path, invoice_number, invoice_date, 
-                amount, amount_original, vat_amount, vat_amount_original,
-                description, supplier_id, company_id, processed_at, source_info
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                file_path, original_path, invoice_number, invoice_date, due_date, normalized_date,
+                amount_original, vat_amount_original, description, supplier_id, company_id,
+                confidence, ocr_text, raw_text, processed_at, source_info,
+                amount_extracted_raw, vat_amount_extracted_raw
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             file_path,
             original_path,
             invoice_number,
             data.get('invoice_date') or pending['invoice_date'],
-            amount,
+            data.get('due_date') or pending['due_date'],
+            data.get('normalized_date') or pending['normalized_date'],
             amount_str,
-            vat_amount,
             vat_amount_str,
             data.get('description') or pending['description'],
             supplier_id,
             company_id,
+            None,  # confidence
+            None,  # ocr_text
+            None,  # raw_text
             datetime.now().isoformat(),
-            'Validated by human'
+            'Validated by human',
+            data.get('amount_original') or pending['amount_original'],
+            data.get('vat_amount_original') or pending['vat_amount_original']
         ))
         
         # Get the ID of the new invoice
@@ -953,7 +946,7 @@ def get_batch_files(batch_id):
     try:
         cursor = conn.execute('''
             SELECT batch_queue.*, pending_invoices.supplier_name, pending_invoices.invoice_number,
-                   pending_invoices.invoice_date, pending_invoices.amount
+                   pending_invoices.invoice_date, pending_invoices.amount_original, pending_invoices.vat_amount_original
             FROM batch_queue 
             LEFT JOIN pending_invoices ON batch_queue.pending_id = pending_invoices.id
             WHERE batch_queue.batch_id = ?
@@ -2214,9 +2207,13 @@ def update_invoice(invoice_id):
             update_fields.append('invoice_date = ?')
             params.append(data['invoice_date'])
             
-        if 'amount' in data:
-            update_fields.append('amount = ?')
-            params.append(data['amount'])
+        if 'amount_original' in data:
+            update_fields.append('amount_original = ?')
+            params.append(data['amount_original'])
+            
+        if 'vat_amount_original' in data:
+            update_fields.append('vat_amount_original = ?')
+            params.append(data['vat_amount_original'])
             
         if 'description' in data:
             update_fields.append('description = ?')
@@ -2434,8 +2431,8 @@ def save_validated_invoices():
                     'company_name': invoice.get('company_name', ''),
                     'invoice_number': invoice.get('invoice_number', ''),
                     'invoice_date': invoice.get('invoice_date', ''),
-                    'amount': invoice.get('amount', ''),
-                    'vat_amount': invoice.get('vat_amount', ''),
+                    'amount_original': invoice.get('amount_original', ''),
+                    'vat_amount_original': invoice.get('vat_amount_original', ''),
                     'description': invoice.get('description', ''),
                     'is_validated': True,
                     'validated_at': datetime.now().isoformat(),
@@ -2563,8 +2560,8 @@ def validate_upload():
                     'company_name': extracted_data.get('company_name', '') or extracted_data.get('Empfängerfirma', ''),
                     'invoice_number': extracted_data.get('invoice_number', '') or extracted_data.get('Rechnungsnummer', ''),
                     'invoice_date': extracted_data.get('invoice_date', '') or extracted_data.get('Rechnungsdatum', ''),
-                    'amount': extracted_data.get('amount', '') or extracted_data.get('Gesamtbetrag', ''),
-                    'vat_amount': extracted_data.get('vat_amount', '') or extracted_data.get('Mehrwertsteuerbetrag', ''),
+                    'amount_original': extracted_data.get('amount_original', '') or extracted_data.get('Gesamtbetrag', ''),
+                    'vat_amount_original': extracted_data.get('vat_amount_original', '') or extracted_data.get('Mehrwertsteuerbetrag', ''),
                     'description': extracted_data.get('description', '') or extracted_data.get('Leistungsbeschreibung', '')
                 }
                 
@@ -2938,7 +2935,7 @@ def finalize_batch():
                 params = []
                 
                 for field in ['supplier_name', 'company_name', 'invoice_number', 
-                              'invoice_date', 'amount', 'vat_amount', 'description']:
+                              'invoice_date', 'amount_original', 'vat_amount_original', 'description']:
                     if field in file_data:
                         update_fields.append(f"{field} = ?")
                         params.append(file_data[field])
@@ -2986,21 +2983,10 @@ def finalize_batch():
                         company_id = cursor.lastrowid
                 
                 # Parse amounts
-                amount_value = 0
-                amount_str = file_data.get('amount') or pending['amount']
-                if amount_str:
-                    try:
-                        amount_value = normalize_amount(amount_str)
-                    except:
-                        log.warning(f"Could not parse amount: {amount_str}")
-                
-                vat_value = 0
-                vat_str = file_data.get('vat_amount') or pending['vat_amount']
-                if vat_str:
-                    try:
-                        vat_value = normalize_amount(vat_str)
-                    except:
-                        log.warning(f"Could not parse VAT amount: {vat_str}")
+                amount_extracted_raw = file_data.get('amount_original') or pending['amount_original']
+                vat_amount_extracted_raw = file_data.get('vat_amount_original') or pending['vat_amount_original']
+                amount_original = clean_amount(amount_extracted_raw)
+                vat_amount_original = clean_amount(vat_amount_extracted_raw)
                 
                 # Get the original file path
                 file_path = pending['file_path']
@@ -3013,25 +2999,30 @@ def finalize_batch():
                 # Insert into the main invoices table
                 cursor.execute('''
                     INSERT INTO invoices (
-                        file_path, original_path, invoice_number, invoice_date, 
-                        amount, amount_original, vat_amount, vat_amount_original,
-                        description, supplier_id, company_id, processed_at,
-                        source_info
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        file_path, original_path, invoice_number, invoice_date, due_date, normalized_date,
+                        amount_original, vat_amount_original, description, supplier_id, company_id,
+                        confidence, ocr_text, raw_text, processed_at, source_info,
+                        amount_extracted_raw, vat_amount_extracted_raw
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     file_path,
                     original_path,
                     file_data.get('invoice_number') or pending['invoice_number'],
                     file_data.get('invoice_date') or pending['invoice_date'],
-                    amount_value,
-                    amount_str,
-                    vat_value,
-                    vat_str,
+                    file_data.get('due_date') or pending['due_date'],
+                    file_data.get('normalized_date') or pending['normalized_date'],
+                    amount_original,
+                    vat_amount_original,
                     file_data.get('description') or pending['description'],
                     supplier_id,
                     company_id,
+                    None,  # confidence
+                    None,  # ocr_text
+                    None,  # raw_text
                     datetime.now().isoformat(),
-                    f"From batch {batch_id}, validated by human"
+                    f"From batch {batch_id}, validated by human",
+                    amount_extracted_raw,
+                    vat_amount_extracted_raw
                 ))
                 
                 # Mark the pending invoice as finalized
@@ -3160,6 +3151,21 @@ def email_keepalive():
             'error': f'Error refreshing session: {str(e)}',
             'reconnect_required': True
         }), 500
+
+# --- Amount cleaning utility ---
+def clean_amount(value):
+    if value is None:
+        return ''
+    try:
+        # Remove all except digits, dot, comma, minus
+        cleaned = re.sub(r'[^\d.,-]', '', str(value))
+        # Replace comma with dot
+        cleaned = cleaned.replace(',', '.')
+        # If not a valid float, return empty string
+        float(cleaned)
+        return cleaned
+    except Exception:
+        return ''
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -217,8 +217,8 @@ def process_invoice_file(file_storage, app_config, db_conn_func, check_invoice_e
             'company_name': extracted_data.get('company_name', '') or extracted_data.get('Empfängerfirma', ''),
             'invoice_number': extracted_data.get('invoice_number', '') or extracted_data.get('Rechnungsnummer', ''),
             'invoice_date': extracted_data.get('invoice_date', '') or extracted_data.get('Rechnungsdatum', ''),
-            'amount': extracted_data.get('amount', '') or extracted_data.get('Gesamtbetrag', ''),
-            'vat_amount': extracted_data.get('vat_amount', '') or extracted_data.get('Mehrwertsteuerbetrag', ''),
+            'amount_original': extracted_data.get('amount', '') or extracted_data.get('Gesamtbetrag', ''),
+            'vat_amount_original': extracted_data.get('vat_amount', '') or extracted_data.get('Mehrwertsteuerbetrag', ''),
             'description': extracted_data.get('description', '') or extracted_data.get('Leistungsbeschreibung', ''),
             'Lieferantename': extracted_data.get('Lieferantename', '') or extracted_data.get('supplier_name', ''),
             'Empfängerfirma': extracted_data.get('Empfängerfirma', '') or extracted_data.get('company_name', ''),
@@ -266,21 +266,6 @@ def process_invoice_file(file_storage, app_config, db_conn_func, check_invoice_e
         
         # Try to save to database
         try:
-            # Handle amounts properly for database
-            if 'amount' in form_data and form_data['amount']:
-                try:
-                    pending_invoice_data['amount'] = normalize_amount(form_data['amount'])
-                    pending_invoice_data['amount_original'] = form_data['amount']
-                except:
-                    pass
-                    
-            if 'vat_amount' in form_data and form_data['vat_amount']:
-                try:
-                    pending_invoice_data['vat_amount'] = normalize_amount(form_data['vat_amount'])
-                    pending_invoice_data['vat_amount_original'] = form_data['vat_amount']
-                except:
-                    pass
-
             pending_id = save_to_pending_func(pending_invoice_data, batch_id, source_info)
             form_data['pending_id'] = pending_id
             

@@ -78,7 +78,7 @@
                                 <label for="amount" class="form-label">Amount</label>
                                 <div class="input-group">
                                     <span class="input-group-text">€</span>
-                                    <input type="text" class="form-control" id="amount" name="amount" value="{{ invoice.amount or invoice.Gesamtbetrag or invoice.total_amount or '' }}">
+                                    <input type="text" class="form-control" id="amount" name="amount_original" value="{{ invoice.amount_original or invoice.Gesamtbetrag or invoice.total_amount or '' }}">
                                 </div>
                             </div>
                         </div>
@@ -88,7 +88,7 @@
                                 <label for="vat-amount" class="form-label">VAT Amount</label>
                                 <div class="input-group">
                                     <span class="input-group-text">€</span>
-                                    <input type="text" class="form-control" id="vat-amount" name="vat_amount" value="{{ invoice.vat_amount or invoice.Mehrwertsteuerbetrag or invoice.tax_amount or '' }}">
+                                    <input type="text" class="form-control" id="vat-amount" name="vat_amount_original" value="{{ invoice.vat_amount_original or invoice.Mehrwertsteuerbetrag or invoice.tax_amount or '' }}">
                                 </div>
                             </div>
                             <div class="col-md-6 mb-3">

@@ -216,12 +216,12 @@
                 
                 <div class="form-group">
                     <label class="required" for="totalAmount">Total Amount</label>
-                    <input type="text" id="totalAmount" name="amount" placeholder="0,00" required>
+                    <input type="text" id="totalAmount" name="amount_original" placeholder="0,00" required>
                 </div>
                 
                 <div class="form-group">
                     <label for="vatAmount">VAT Amount</label>
-                    <input type="text" id="vatAmount" name="vat_amount" placeholder="0,00">
+                    <input type="text" id="vatAmount" name="vat_amount_original" placeholder="0,00">
                 </div>
                 
                 <div class="form-group">
@@ -301,8 +301,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Fill form fields
                 document.getElementById('invoiceNumber').value = invoice.invoice_number || '';
                 document.getElementById('invoiceDate').value = formatDateForDisplay(invoice.invoice_date);
-                document.getElementById('totalAmount').value = formatNumber(invoice.amount);
-                document.getElementById('vatAmount').value = formatNumber(invoice.vat_amount);
+                document.getElementById('totalAmount').value = formatNumber(invoice.amount_original);
+                document.getElementById('vatAmount').value = formatNumber(invoice.vat_amount_original);
                 document.getElementById('vendorName').value = invoice.supplier_name || '';
                 document.getElementById('companyName').value = invoice.company_name || '';
                 document.getElementById('description').value = invoice.description || '';
@@ -345,8 +345,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const formData = {
             invoice_number: document.getElementById('invoiceNumber').value.trim(),
             invoice_date: formatDateForSubmission(document.getElementById('invoiceDate').value),
-            amount: parseNumber(document.getElementById('totalAmount').value),
-            vat_amount: parseNumber(document.getElementById('vatAmount').value),
+            amount_original: parseNumber(document.getElementById('totalAmount').value),
+            vat_amount_original: parseNumber(document.getElementById('vatAmount').value),
             supplier_name: document.getElementById('vendorName').value.trim(),
             company_name: document.getElementById('companyName').value.trim(),
             description: document.getElementById('description').value.trim()

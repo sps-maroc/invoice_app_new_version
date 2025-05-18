@@ -74,9 +74,7 @@ class InvoiceDatabase:
             invoice_number TEXT,
             invoice_date TEXT,
             normalized_date TEXT,
-            amount REAL,
             amount_original TEXT,
-            vat_amount REAL,
             vat_amount_original TEXT,
             description TEXT,
             supplier_id INTEGER,
@@ -142,12 +140,8 @@ class InvoiceDatabase:
         
         # Parse and normalize the amount
         amount_original = invoice_data.get('Gesamtbetrag', '0')
-        amount = self.normalize_amount(amount_original)
-        
         # Parse and normalize the VAT amount
         vat_original = invoice_data.get('Mehrwertsteuerbetrag', '0')
-        vat_amount = self.normalize_amount(vat_original)
-        
         # Parse and normalize the date
         date_original = invoice_data.get('Rechnungsdatum', None)
         normalized_date = self.normalize_date(date_original) if date_original else None
@@ -157,18 +151,16 @@ class InvoiceDatabase:
             self.cursor.execute('''
             INSERT INTO invoices (
                 file_path, original_path, invoice_number, invoice_date, normalized_date,
-                amount, amount_original, vat_amount, vat_amount_original, description,
+                amount_original, vat_amount_original, description,
                 supplier_id, company_id, processed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 file_path,
                 original_path,
                 invoice_data.get('Rechnungsnummer', 'Unknown'),
                 date_original,
                 normalized_date,
-                amount,
                 amount_original,
-                vat_amount,
                 vat_original,
                 invoice_data.get('Leistungsbeschreibung', ''),
                 supplier_id,
@@ -247,8 +239,7 @@ class InvoiceScanner:
         
         # Initialize Ollama LLM
         OLLAMA_HOST = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
-        # Default to llama3:latest, as it's confirmed available.
-        self.model_name = os.environ.get('INVOICE_MODEL', 'llama3:latest') 
+        self.model_name = 'llama3.2:latest'
         self.logger.info(f"Using Ollama model {self.model_name} at {OLLAMA_HOST}")
         
         # Set up skipped invoices tracking
@@ -343,91 +334,16 @@ Bemerkungen:
                 "error": "Document does not appear to be an invoice",
                 "skipped": True
             }
-            
         try:
-            # Use provided model_name or fall back to the default
-            effective_model_name = model_name or self.model_name
-            # Set Ollama host
+            # Always use llama3.2:latest
+            effective_model_name = 'llama3.2:latest'
             OLLAMA_HOST = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
             
-            # Set model-specific parameters
-            timeout = 300  # Default 5 minutes for most models
-            temperature = 0.1  # Low temperature for deterministic output
+            # Use fixed settings for llama3.2:latest
+            timeout = 360  # 6 minutes
+            temperature = 0.15
+            self.logger.info(f"Using llama3.2:latest model with temperature={temperature}, timeout={timeout}s")
             
-            # Try to connect to Ollama first before starting processing
-            try:
-                # Simple check if Ollama is available
-                import requests
-                tags_response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
-                tags_response.raise_for_status() # Raise an exception for HTTP errors
-                available_models_data = tags_response.json()
-                available_model_names = [m['name'] for m in available_models_data.get('models', [])]
-                self.logger.info(f"Available Ollama models: {available_model_names}")
-
-                # Check if the intended model_name is available
-                if effective_model_name not in available_model_names:
-                    self.logger.warning(f"Model '{effective_model_name}' not found in Ollama. Trying alternatives.")
-                    # Attempt to find a suitable alternative based on common base names
-                    alternatives = {
-                        'llama3': ['llama3:latest', 'llama3.2:latest'],
-                        'gemma2': ['gemma2:latest'],
-                        'mistral': ['mistral:latest'],
-                        'qwen2': ['qwen2:7b']
-                    }
-                    base_model_name = effective_model_name.split(':')[0] # e.g., 'llama3' from 'llama3:latest'
-                    found_alternative = False
-                    if base_model_name in alternatives:
-                        for alt_name in alternatives[base_model_name]:
-                            if alt_name in available_model_names:
-                                effective_model_name = alt_name
-                                self.logger.info(f"Using alternative model: {effective_model_name}")
-                                found_alternative = True
-                                break
-                    if not found_alternative:
-                        # If no specific alternative, try the default self.model_name (which is llama3:latest)
-                        if self.model_name in available_model_names:
-                            effective_model_name = self.model_name
-                            self.logger.info(f"Falling back to default model: {effective_model_name}")
-                        else: # If default also not found, use the first available one or raise error
-                            if available_model_names:
-                                effective_model_name = available_model_names[0]
-                                self.logger.warning(f"Default and specified models not found. Using first available: {effective_model_name}")
-                            else:
-                                raise Exception("No Ollama models available.")
-
-            except requests.exceptions.RequestException as e_req:
-                self.logger.error(f"Cannot connect to Ollama server at {OLLAMA_HOST}: {str(e_req)}")
-                return {
-                    "success": False,
-                    "error": f"Ollama server not available at {OLLAMA_HOST}: {str(e_req)}"
-                }
-            except Exception as e_ollama_check:
-                self.logger.error(f"Error checking Ollama models: {str(e_ollama_check)}")
-                return {
-                    "success": False,
-                    "error": f"Error verifying Ollama models: {str(e_ollama_check)}"
-                }
-
-            # Model-specific adjustments based on the effective_model_name
-            if "gemma2" in effective_model_name:
-                timeout = 480  # Increase to 8 minutes for Gemma
-                temperature = 0.05  # Very deterministic for Gemma
-                self.logger.info(f"Using gemma2 model with temperature={temperature}, timeout={timeout}s")
-            elif "qwen2" in effective_model_name:
-                timeout = 420  # Increase to 7 minutes for Qwen
-                temperature = 0.05  # Very deterministic for Qwen
-                self.logger.info(f"Using qwen2 model with temperature={temperature}, timeout={timeout}s")
-            elif "llama3.2" in effective_model_name:
-                timeout = 360  # Increase to 6 minutes for Llama
-                temperature = 0.15
-                self.logger.info(f"Using llama3.2 model with temperature={temperature}, timeout={timeout}s")
-            elif "mistral" in effective_model_name:
-                timeout = 360  # Increase to 6 minutes for Mistral
-                temperature = 0.15
-                self.logger.info(f"Using mistral model with temperature={temperature}, timeout={timeout}s")
-            else:
-                self.logger.info(f"Using generic model settings with temperature={temperature}, timeout={timeout}s")
-                
             # Create the LLM with the appropriate settings
             llm = OllamaLLM(
                 model=effective_model_name,

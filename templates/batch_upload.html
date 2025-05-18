@@ -950,11 +950,11 @@
                 ]);
                 
                 const amount = getFieldValue(dataSource, [
-                    'amount', 'Gesamtbetrag', 'totalAmount', 'total'
+                    'amount_original', 'Gesamtbetrag', 'totalAmount', 'total'
                 ]);
                 
                 const vatAmount = getFieldValue(dataSource, [
-                    'vat_amount', 'Mehrwertsteuerbetrag', 'vatAmount', 'tax'
+                    'vat_amount_original', 'Mehrwertsteuerbetrag', 'vatAmount', 'tax'
                 ]);
                 
                 const supplierName = getFieldValue(dataSource, [
@@ -1011,14 +1011,14 @@
                         <label class="form-label">Amount</label>
                         <div class="input-group">
                             <span class="input-group-text">€</span>
-                            <input type="text" class="form-control" name="amount" value="${amount || ''}">
+                            <input type="text" class="form-control" name="amount_original" value="${amount || ''}">
                         </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">VAT Amount</label>
                         <div class="input-group">
                             <span class="input-group-text">€</span>
-                            <input type="text" class="form-control" name="vat_amount" value="${vatAmount || ''}">
+                            <input type="text" class="form-control" name="vat_amount_original" value="${vatAmount || ''}">
                         </div>
                     </div>
                     <div class="mb-3">

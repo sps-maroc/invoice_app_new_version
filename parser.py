@@ -110,10 +110,10 @@ class EnhancedInvoiceFields(BaseModel):
     # English fields
     supplier_name: str = Field("", description="Name of the supplier (English)")
     invoice_date: str = Field("", description="Invoice date (English)")
-    amount: str = Field("", description="Total amount (English)")
+    amount_original: str = Field("", description="Total amount (English, original string)")
     company_name: str = Field("", description="Recipient company (English)")
     invoice_number: str = Field("", description="Invoice number (English)")
-    vat_amount: str = Field("", description="VAT amount (English)")
+    vat_amount_original: str = Field("", description="VAT amount (English, original string)")
     description: str = Field("", description="Service description (English)")
     
     # Additional useful fields
@@ -129,10 +129,10 @@ class EnhancedInvoiceFields(BaseModel):
         field_map = {
             "Lieferantename": "supplier_name",
             "Rechnungsdatum": "invoice_date",
-            "Gesamtbetrag": "amount", 
+            "Gesamtbetrag": "amount_original", 
             "Empfängerfirma": "company_name",
             "Rechnungsnummer": "invoice_number",
-            "Mehrwertsteuerbetrag": "vat_amount",
+            "Mehrwertsteuerbetrag": "vat_amount_original",
             "Leistungsbeschreibung": "description"
         }
         

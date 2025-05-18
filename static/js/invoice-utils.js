@@ -18,8 +18,8 @@ function extractInvoiceData(data, fieldMap = {}) {
         'company_name': ['company_name', 'Empfängerfirma'],
         'invoice_number': ['invoice_number', 'Rechnungsnummer'],
         'invoice_date': ['invoice_date', 'Rechnungsdatum'],
-        'amount': ['amount', 'Gesamtbetrag'],
-        'vat_amount': ['vat_amount', 'Mehrwertsteuerbetrag'],
+        'amount_original': ['amount_original', 'amount', 'Gesamtbetrag'],
+        'vat_amount_original': ['vat_amount_original', 'vat_amount', 'Mehrwertsteuerbetrag'],
         'description': ['description', 'Leistungsbeschreibung'],
         'file_path': ['file_path', 'original_path']
     };
@@ -99,8 +99,8 @@ function fillInvoiceForm(form, data, fieldMap = {}) {
         'company-name': 'company_name',
         'invoice-number': 'invoice_number',
         'invoice-date': 'invoice_date',
-        'amount': 'amount',
-        'vat-amount': 'vat_amount',
+        'amount-original': 'amount_original',
+        'vat-amount-original': 'vat_amount_original',
         'description': 'description',
         'file-path': 'file_path'
     };
@@ -143,13 +143,13 @@ function validateInvoiceData(data) {
     }
     
     // Format amount and VAT fields
-    if (result.amount && typeof result.amount === 'string') {
-        result.amount = parseFloat(result.amount.replace(/[^\d.,]/g, '')
+    if (result.amount_original && typeof result.amount_original === 'string') {
+        result.amount_original = parseFloat(result.amount_original.replace(/[^\d.,]/g, '')
             .replace(/,/g, '.')) || 0;
     }
     
-    if (result.vat_amount && typeof result.vat_amount === 'string') {
-        result.vat_amount = parseFloat(result.vat_amount.replace(/[^\d.,]/g, '')
+    if (result.vat_amount_original && typeof result.vat_amount_original === 'string') {
+        result.vat_amount_original = parseFloat(result.vat_amount_original.replace(/[^\d.,]/g, '')
             .replace(/,/g, '.')) || 0;
     }
     
