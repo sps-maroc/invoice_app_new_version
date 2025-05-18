@@ -18,8 +18,8 @@ function extractInvoiceData(data, fieldMap = {}) {
         'company_name': ['company_name', 'Empfängerfirma'],
         'invoice_number': ['invoice_number', 'Rechnungsnummer'],
         'invoice_date': ['invoice_date', 'Rechnungsdatum'],
-        'amount_original': ['amount_original', 'amount', 'Gesamtbetrag'],
-        'vat_amount_original': ['vat_amount_original', 'vat_amount', 'Mehrwertsteuerbetrag'],
+        'amount_original': ['amount_original', 'Gesamtbetrag'],
+        'vat_amount_original': ['vat_amount_original', 'Mehrwertsteuerbetrag'],
         'description': ['description', 'Leistungsbeschreibung'],
         'file_path': ['file_path', 'original_path']
     };
@@ -151,18 +151,18 @@ function validateInvoiceData(data) {
  * @returns {string} - Formatted amount string
  */
 function formatInvoiceAmount(amount, locale = 'de-DE', currency = 'EUR') {
-    if (amount === null || amount === undefined || isNaN(parseFloat(amount))) {
-        return 'N/A';
+    if (amount === null || amount === undefined || amount === '') {
+        return '';
     }
-    
-    const numAmount = typeof amount === 'string' ? 
-        parseFloat(amount.replace(/[^\d.,]/g, '').replace(/,/g, '.')) : 
-        parseFloat(amount);
-    
+    let cleaned = String(amount).replace(/[^\d,.-]/g, '').replace(',', '.');
+    let num = parseFloat(cleaned);
+    if (isNaN(num)) {
+        return amount;
+    }
     return new Intl.NumberFormat(locale, { 
         style: 'currency', 
         currency: currency 
-    }).format(numAmount);
+    }).format(num);
 }
 
 /**

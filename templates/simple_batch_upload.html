@@ -451,7 +451,7 @@
                                             <label class="form-label">Amount</label>
                                             <div class="input-group">
                                                 <span class="input-group-text">€</span>
-                                                <input type="number" name="amount_original" step="0.01" class="form-control" value="${invoice.data?.amount_original || ''}">
+                                                <input type="number" name="amount_original" step="0.01" class="form-control" value="${extractNumericAmount(invoice.data?.amount_original)}">
                                             </div>
                                         </div>
                                         
@@ -459,7 +459,7 @@
                                             <label class="form-label">VAT Amount</label>
                                             <div class="input-group">
                                                 <span class="input-group-text">€</span>
-                                                <input type="number" name="vat_amount_original" step="0.01" class="form-control" value="${invoice.data?.vat_amount_original || ''}">
+                                                <input type="number" name="vat_amount_original" step="0.01" class="form-control" value="${extractNumericAmount(invoice.data?.vat_amount_original)}">
                                             </div>
                                         </div>
                                     </div>
@@ -516,7 +516,16 @@
                 });
             });
         }
-        
+        function extractNumericAmount(amountStr) {
+    if (!amountStr) return '';
+    // Remove all non-digit, non-dot, non-comma, non-minus
+    let cleaned = String(amountStr).replace(/[^\d,.-]/g, '');
+    // Replace comma with dot for decimal
+    cleaned = cleaned.replace(',', '.');
+    // Parse as float
+    let num = parseFloat(cleaned);
+    return isNaN(num) ? '' : num;
+}
         // Format date for input
         function formatDateForInput(dateString) {
             if (!dateString) return '';

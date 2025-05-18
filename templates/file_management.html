@@ -193,7 +193,7 @@ function refreshFiles() {
                     <td>${file.company_name || 'Unknown'}</td>
                     <td>${file.supplier_name || 'Unknown'}</td>
                     <td>${file.invoice_date || 'Unknown'}</td>
-                    <td>${formatCurrency(file.amount)}</td>
+                    <td>${formatCurrency(file.amount_original)}</td>
                     <td class="text-end">
                         <div class="btn-group btn-group-sm">
                             <button class="btn btn-primary" onclick="previewFile('${file.file_path.replace(/\\/g, "/")}')" title="View Document">
@@ -256,7 +256,16 @@ function previewFile(filePath) {
         }
     }, 300);
 }
-
+function extractNumericAmount(amountStr) {
+    if (!amountStr) return '';
+    // Remove all non-digit, non-dot, non-comma, non-minus
+    let cleaned = String(amountStr).replace(/[^\d,.-]/g, '');
+    // Replace comma with dot for decimal
+    cleaned = cleaned.replace(',', '.');
+    // Parse as float
+    let num = parseFloat(cleaned);
+    return isNaN(num) ? '' : num;
+}
 function editInvoiceDetails(fileId) {
     // Get invoice details for editing
     fetch(`/api/invoices?id=${fileId}`)
@@ -299,8 +308,7 @@ function editInvoiceDetails(fileId) {
                 }
             }
             
-            document.getElementById('editAmount').value = parseFloat(invoice.amount) || '';
-            
+            document.getElementById('editAmount').value = extractNumericAmount(invoice.amount_original);            
             // Enable all form fields for editing
             document.getElementById('editInvoiceNumber').disabled = false;
             document.getElementById('editCompany').disabled = false;
@@ -326,12 +334,12 @@ function editInvoiceDetails(fileId) {
 function saveEdit() {
     const fileId = document.getElementById('editFileId').value;
     const data = {
-        invoice_number: document.getElementById('editInvoiceNumber').value,
-        company_name: document.getElementById('editCompany').value,
-        supplier_name: document.getElementById('editSupplier').value,
-        invoice_date: document.getElementById('editDate').value,
-        amount: parseFloat(document.getElementById('editAmount').value) || null
-    };
+    invoice_number: document.getElementById('editInvoiceNumber').value,
+    company_name: document.getElementById('editCompany').value,
+    supplier_name: document.getElementById('editSupplier').value,
+    invoice_date: document.getElementById('editDate').value,
+    amount_original: document.getElementById('editAmount').value // send as string!
+};
     
     // Show saving indicator
     const saveBtn = document.getElementById('saveEditBtn');

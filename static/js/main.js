@@ -51,15 +51,20 @@ document.addEventListener('DOMContentLoaded', function() {
  * @param {string} currency - The currency to use (default: 'EUR')
  * @returns {string} Formatted currency string
  */
-function formatCurrency(amount, locale = 'de-DE', currency = 'EUR') {
-    if (amount === null || amount === undefined || isNaN(amount)) {
-        return 'N/A';
+function formatCurrency(amount_original, locale = 'de-DE', currency = 'EUR') {
+    if (amount_original === null || amount_original === undefined || amount_original === '') {
+        return '';
     }
-    
+    // Remove currency symbols and spaces, replace comma with dot
+    let cleaned = String(amount_original).replace(/[^\d,.-]/g, '').replace(',', '.');
+    let num = parseFloat(cleaned);
+    if (isNaN(num)) {
+        return amount_original; // fallback to raw string if not a number
+    }
     return new Intl.NumberFormat(locale, { 
         style: 'currency', 
         currency: currency 
-    }).format(amount);
+    }).format(num);
 }
 
 /**
